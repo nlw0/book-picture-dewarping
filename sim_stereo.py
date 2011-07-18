@@ -18,7 +18,7 @@ from pylab import *
 ion()
 
 
-#rc('image', cmap='RdBu')
+rc('image', cmap='RdBu')
 #rc('image', cmap='RdYlBu')
 
 
@@ -107,138 +107,176 @@ def cone_get_texture_coordinates(verticesW,k):
 
 
 
-## PARAM
-## The 'input parameters'.
 
-## Choose either 'cone' for the cone model, or 'pcyl' for the
-## parabolic cylinder model. This affects the functions used in
-## calculations, and also the default scene parameters.
-#model_type = 'cone'
-model_type = 'pcyl'
-ex_case = 0
-
-## mysize: Image size in pixels
-## f: Focal distance, in pixels
-
-if model_type == 'cone':
-  funL = cone_funL
-  get_texture_coordinates = cone_get_texture_coordinates
-elif model_type == 'pcyl':
-  funL = pcyl_funL
-  get_texture_coordinates = pcyl_get_texture_coordinates
-else:
-  raise TypeError
-
-## Extrinsic parameters, camera pose.
-if model_type == 'cone':
-  if ex_case == 0:
-  ## Looking straight into world origin
-    mysize=(480,640)
-    f = mysize[0]/3.
-    p = array([0,100,0])
-    theta = 0*pi/180
-    phi = 90*pi/180
-    psi = 0
-    k = 1
-  elif ex_case == 1:
-    mysize=(480,640)
-    f = mysize[0]/2.
-    p = array([0,100,60])
-    theta = 10*pi/180
-    phi = 60*pi/180
-    psi = 0*pi/180
-    k = 1
-elif model_type == 'pcyl':
-  if ex_case == 0:
-    mysize=(480,640)
-    f = mysize[0]/3.
-    p = array([80,0,-15])
-    theta = 10*pi/180
-    phi = 8*pi/180
-    psi = 10*pi/180
-    k = 1e-3
-else:
-  raise TypeError
-
-
-## Initialize image array
-pix = zeros((mysize[0],mysize[1],3))
-
-pix[:,:,1],pix[:,:,0] = mgrid[-mysize[0]/2:mysize[0]/2,-mysize[1]/2:mysize[1]/2]+0.5
-pix[:,:,2] = f
-
-R1 = array([[+cos(theta), +sin(theta), 0],
-            [-sin(theta), +cos(theta), 0],
-            [0, 0, 1]])
-R2 = array([[1, 0, 0],
-            [0, +cos(phi), +sin(phi)],
-            [0, -sin(phi), +cos(phi)],])
-R3 = array([[+cos(psi),0,+sin(psi)],
-            [0,1,0],
-            [-sin(psi),0,+cos(psi)],])
-R = dot(dot(R1,R2),R3)
-
-## Reshape image into a list of 3D vectors. Apply rotation matrix.
-d = dot(pix.reshape(mysize[0]*mysize[1],3),R)
-
-## Calculate World coordinates of each pixel measurement.
-verticesW = funL(d, p, f=f, k=k)
-
-## Find (again...) the valid measurements.
-where = verticesW[:,2]<1e6
-## Calculate coordinates in the camera reference frame.
-vertices = zeros(verticesW.shape)
-vertices[where] = dot(verticesW[where]-p, inv(R))
-
-## Max and min measurements, for plotting.
-maxdist = vertices[where,2].max()
-mindist = vertices[where,2].min()
-
-## For making plot cute.
-for kk in find(1-where):
-  vertices[kk,2] = maxdist*1.05
-
-## The range measurements. An image containing the z coordinates (relative to camera position)
-I = reshape(vertices[:,2], mysize)
-
-## Get texture coordinates from original model
-uv = reshape( get_texture_coordinates(verticesW, k), (mysize[0],mysize[1],2) )
+def disparity_from_range(z):
+  d = zeros(z.shape, dtype=uint16)
+  ## from http://mathnathan.com/2011/02/03/depthvsdistance/
+  d[:] = floor(0.5+ 1091.5 - 348.0/z)
+  return d
 
 
 
-figure(1, figsize=(16,12))
-suptitle('Parabolic cylinder ranging and mapping coords',
-         fontweight='bold', fontsize=20)
-
-subplot(2,2,1)
-title('Range measurements')
-imshow(I, cmap=cm.gray, interpolation='nearest', vmin=mindist, vmax=maxdist*1.001)
-axis([0,mysize[1], mysize[0], 0])
-
-subplot(2,2,3)
-title('Contour plot of above')
-contourf(I, list(mgrid[mindist:mindist+(maxdist-mindist)*11/10.:(maxdist-mindist)/10]))
-axis('equal')
-axis([0,mysize[1], mysize[0], 0])
 
 
-## Plot the texture coordinates
-ll = 200
-subplot
-subplot(2,2,2)
-title('u coordinate (algebric)')
-imshow(uv[:,:,0], interpolation='nearest', vmin=-ll, vmax=ll)
-axis([0,mysize[1], mysize[0], 0])
-subplot(2,2,4)
-title('v coordinate (algebric)')
-imshow(uv[:,:,1], interpolation='nearest', vmin=-ll, vmax=ll)
-axis([0,mysize[1], mysize[0], 0])
 
 
-figure(2)
-title('UV mesh view', fontweight = 'bold', size=20)
-VV = (mgrid[0:201:1.0]-100)*2.0
-contour(uv[:,:,0],VV)
-contour(uv[:,:,1],VV)
-axis('equal')
-axis([0,mysize[1], mysize[0], 0])
+
+
+if __name__=='__main__':
+  ## PARAM
+  ## The 'input parameters'.
+
+  ## Choose either 'cone' for the cone model, or 'pcyl' for the
+  ## parabolic cylinder model. This affects the functions used in
+  ## calculations, and also the default scene parameters.
+  #model_type = 'cone'
+  model_type = 'pcyl'
+  ex_case = 1
+
+  ## mysize: Image size in pixels
+  ## f: Focal distance, in pixels
+
+  if model_type == 'cone':
+    funL = cone_funL
+    get_texture_coordinates = cone_get_texture_coordinates
+  elif model_type == 'pcyl':
+    funL = pcyl_funL
+    get_texture_coordinates = pcyl_get_texture_coordinates
+  else:
+    raise TypeError
+
+  ## Extrinsic parameters, camera pose.
+  if model_type == 'cone':
+    if ex_case == 0:
+    ## Looking straight into world origin
+      mysize=(480,640)
+      f = mysize[0]/3.
+      p = array([0,100,0])
+      theta = 0*pi/180
+      phi = 90*pi/180
+      psi = 0
+      k = 1
+    elif ex_case == 1:
+      mysize=(480,640)
+      f = mysize[0]/2.
+      p = array([0,100,60])
+      theta = 10*pi/180
+      phi = 60*pi/180
+      psi = 0*pi/180
+      k = 1
+  elif model_type == 'pcyl':
+    if ex_case == 0:
+      mysize=(480,640)
+      f = mysize[0]/3.
+      p = array([80,0,-15])
+      theta = 10*pi/180
+      phi = 8*pi/180
+      psi = 10*pi/180
+      k = 1e-3
+    if ex_case == 1:
+      mysize=(960,1280)
+      f = mysize[0]*6.0
+      p = 0.4*array([1.,0,-1.])
+      theta = 0*pi/180
+      phi = 22*pi/180
+      psi = 40*pi/180
+      k = 9e-1
+  else:
+    raise TypeError
+
+
+  ## Initialize image array
+  pix = zeros((mysize[0],mysize[1],3))
+
+  pix[:,:,1],pix[:,:,0] = mgrid[-mysize[0]/2:mysize[0]/2,-mysize[1]/2:mysize[1]/2]+0.5
+  pix[:,:,2] = f
+
+  R1 = array([[+cos(theta), +sin(theta), 0],
+              [-sin(theta), +cos(theta), 0],
+              [0, 0, 1]])
+  R2 = array([[1, 0, 0],
+              [0, +cos(phi), +sin(phi)],
+              [0, -sin(phi), +cos(phi)],])
+  R3 = array([[+cos(psi),0,+sin(psi)],
+              [0,1,0],
+              [-sin(psi),0,+cos(psi)],])
+  R = dot(dot(R1,R2),R3)
+
+  ## Reshape image into a list of 3D vectors. Apply rotation matrix.
+  d = dot(pix.reshape(mysize[0]*mysize[1],3),R)
+
+  ## Calculate World coordinates of each pixel measurement.
+  verticesW = funL(d, p, f=f, k=k)
+
+  ## Find (again...) the valid measurements.
+  where = verticesW[:,2]<1e6
+  ## Calculate coordinates in the camera reference frame.
+  vertices = zeros(verticesW.shape)
+  vertices[where] = dot(verticesW[where]-p, inv(R))
+
+  ## Max and min measurements, for plotting.
+  maxdist = vertices[where,2].max()
+  mindist = vertices[where,2].min()
+
+  ## For making plot cute.
+  for kk in find(1-where):
+    vertices[kk,2] = maxdist*1.05
+
+  ## The range measurements. An image containing the z coordinates (relative to camera position)
+  I = reshape(vertices[:,2], mysize)
+
+  ## Get texture coordinates from original model
+  uv = reshape( get_texture_coordinates(verticesW, k), (mysize[0],mysize[1],2) )
+
+  ## Calculate the disparity values
+  baseline = 0.01
+  disparity = disparity_from_range(I)
+
+
+
+
+  figure(1, figsize=(16,12))
+  suptitle('Parabolic cylinder ranging and mapping coords',
+           fontweight='bold', fontsize=20)
+
+  subplot(2,2,1)
+  title('Range measurements')
+  imshow(I, cmap=cm.gray, interpolation='nearest', vmin=mindist, vmax=maxdist*1.001)
+  axis([0,mysize[1], mysize[0], 0])
+
+  # subplot(2,2,3)
+  # title('Contour plot of above')
+  # contourf(I, list(mgrid[mindist:mindist+(maxdist-mindist)*11/10.:(maxdist-mindist)/10]))
+  # axis('equal')
+  # axis([0,mysize[1], mysize[0], 0])
+
+
+  ## Plot the texture coordinates
+  # ll = 200
+  ll  = (np.abs(uv)).max()
+  subplot
+  subplot(2,2,2)
+  title('u coordinate (algebric)')
+  imshow(uv[:,:,0], interpolation='nearest', vmin=-ll, vmax=ll)
+  axis([0,mysize[1], mysize[0], 0])
+  subplot(2,2,4)
+  title('v coordinate (algebric)')
+  imshow(uv[:,:,1], interpolation='nearest', vmin=-ll, vmax=ll)
+  axis([0,mysize[1], mysize[0], 0])
+
+  subplot(2,2,3)
+  imshow(disparity, interpolation='nearest', vmin=420, vmax=560)
+  # contourf(disparity)
+  axis([0,mysize[1], mysize[0], 0])
+
+  # figure(2)
+  # title('UV mesh view', fontweight = 'bold', size=20)
+  # VV = (mgrid[0:201:1.0]-100)*2.0
+  # contour(uv[:,:,0],VV)
+  # contour(uv[:,:,1],VV)
+  # axis('equal')
+  # axis([0,mysize[1], mysize[0], 0])
+
+  savetxt('params.txt', [f, p[0], p[1], p[2], theta, phi, psi, k])
+  savetxt('disparity.txt', disparity, '%d')
+  savez('coords', vertices=vertices, uv=uv)
