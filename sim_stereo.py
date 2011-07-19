@@ -15,11 +15,27 @@
 
 from pylab import *
 
+from scipy.special import ellipeinc
+
 ion()
+
+
 
 
 rc('image', cmap='RdBu')
 #rc('image', cmap='RdYlBu')
+
+from pylab import *
+cdict = {'red': ((0.0, 1.0, 1.0),
+                 (0.5, 0.0, 0.0),
+                 (1.0, 1.0, 1.0)),
+         'green': ((0.0, 0.0, 0.0),
+                   (0.5, 0.0, 0.0),
+                   (1.0, 1.0, 1.0)),
+         'blue': ((0.0, 0.0, 0.0),
+                  (0.5, 1.0, 1.0),
+                  (1.0, 1.0, 1.0))}
+my_cmap = matplotlib.colors.LinearSegmentedColormap('my_colormap',cdict,256)
 
 
 def pcyl_funL(d, p, k=5e-2):
@@ -61,50 +77,10 @@ def pcyl_funL(d, p, k=5e-2):
 
   return out
 
-
-
-
-
-def trig_funL(d, p, k=0.01):
-  '''Calculates distances from a sinusoidal surface, with perspectve distortion.'''
-  # { (x,y,z) = tau * d + p
-  # { z = k * cos(x)
-
-  # This must be solved by an iterative technique. In this case,
-  # Newthon's method did the trick. It's just crazy. Don't try this at
-  # home with your dad's stereo. Only with a hip-hop supervision,
-  # allright?
-
-  # This assumes the whole plane is on the camera sight, and no line
-  # crosses the surface twice.
-
-  out = 1e6*ones(d.shape)
-
-  ## First approximation is z ~ 0, ergo
-  tau = -p[2]/d[:,2]
-
-  Niter = 3
-  for k in range(Niter):
-    fx = k * cos(tau*d[:,0] + p[0]) - tau*d[:,2] - p[2]
-    flx = -k*d[:,0]*sin(tau*d[:,0] + p[0]) - d[:,2]
-    dec = fx/flx
-    tau = tau - dec
-
-  out = p + c_[tau,tau,tau]*d
-
-  errz = np.abs(out[:,2]) > 1.1*k
-  tau[errz] = -p[2]/d[:,2]
-  out[errz] = p + c_[tau[errz],tau[errz],tau[errz]]*d[errz]
-
-  return out
-
-
-
 def parabola_length(x,k):
   return 0.5*(x*sqrt(4*k**2*x**2+1)+log(2*k*x+sqrt(4*k**2*x**2+1))*0.5/k)
 def pcyl_get_texture_coordinates(verticesW,k):
   return c_[parabola_length(verticesW[:,0],k), verticesW[:,1]]
-
 
 def cone_funL(d, p, k=5e-2):
   '''Calculates distances from a cone. Symmetri axis is over y direction.'''
@@ -141,6 +117,70 @@ def cone_get_texture_coordinates(verticesW,k):
   rho = verticesW[:,1]*sqrt(1+k)
   theta = arctan2(verticesW[:,0],verticesW[:,2])*sqrt(k)/sqrt(1+k)
   return c_[rho * sin(theta), rho * cos(theta)]
+
+def trig_funL(d, p, k=0.01):
+  '''Calculates distances from a sinusoidal surface, with perspectve distortion.'''
+  # { (x,y,z) = tau * d + p
+  # { z = k * cos(x)
+
+  # This must be solved by an iterative technique. In this case,
+  # Newthon's method did the trick. It's just crazy. Don't try this at
+  # home with your dad's stereo. Only with a hip-hop supervision,
+  # allright?
+
+  # This assumes the whole plane is on the camera sight, and no line
+  # crosses the surface twice.
+
+  ## First approximation is z ~ 0, ergo
+
+  omega = 40.0
+
+  assert p[2]<0
+  assert (d[:,2]>0).all()
+
+  tau = -p[2]/d[:,2]
+  ftau = k * cos(omega*(tau*d[:,0] + p[0])) - tau*d[:,2] - p[2]
+  wfp = ftau>0
+  wfn = ftau<=0
+  taup = copy(tau)
+  taun = copy(tau)
+
+  while ((k * cos(omega*(taun[wfp]*d[wfp,0] + p[0])) - taun[wfp]*d[wfp,2] - p[2]) > 0).any():
+    print '-',
+    taun[wfp] += 1e-5
+  while ((k * cos(omega*(taup[wfn]*d[wfn,0] + p[0])) - taup[wfn]*d[wfn,2] - p[2]) < 0).any():
+    print '=',
+    taup[wfn] -= 1e-5
+
+  Niter = 40
+  for n in range(Niter):
+    tau = (taup+taun)/2
+    ftau = k * cos(omega*(tau*d[:,0] + p[0])) - tau*d[:,2] - p[2]
+    wfp = ftau>0
+    wfn = ftau<=0
+    taup[wfp] = tau[wfp]
+    taun[wfn] = tau[wfn]
+
+  tau = (taup+taun)/2
+
+  out = p + c_[tau,tau,tau]*d
+
+  # errz = np.abs(out[:,2]) > 1.1*k
+  # tau[errz] = -p[2]/d[:,2]
+  # out[errz] = p + c_[tau[errz],tau[errz],tau[errz]]*d[errz]
+
+  return out
+
+def sin_length(phi,m,omega):
+  return ellipeinc(pi/2+omega*phi, m/(1+m) )*sqrt(1+m)/omega
+def trig_get_texture_coordinates(verticesW,k):
+  omega = 80
+  m = k**2 * omega**2
+  return c_[ sin_length(verticesW[:,0],m,omega) , verticesW[:,1]]
+
+
+
+
 
 
 
@@ -183,7 +223,7 @@ if __name__=='__main__':
     get_texture_coordinates = pcyl_get_texture_coordinates
   elif model_type == 'trig':
     funL = trig_funL
-    get_texture_coordinates = cone_get_texture_coordinates
+    get_texture_coordinates = trig_get_texture_coordinates
   else:
     raise TypeError
 
@@ -227,11 +267,11 @@ if __name__=='__main__':
     if ex_case == 0:
       mysize=(480,640)
       f = mysize[0]/1.
-      p = array([1,0,-9.])
-      theta = 10*pi/180
-      phi = 10*pi/180
-      psi = 1*pi/180
-      k = 0.0001
+      p = array([-1,0,-.57])
+      theta = 3*pi/180
+      phi = 15*pi/180
+      psi = -3*pi/180
+      k = 0.01
   else:
     raise TypeError
 
@@ -287,7 +327,7 @@ if __name__=='__main__':
 
 
   figure(1, figsize=(16,12))
-  suptitle('Parabolic cylinder ranging and mapping coords',
+  suptitle('Sinusoidal surface ranging and mapping coords',
            fontweight='bold', fontsize=20)
 
   subplot(2,2,1)
@@ -302,29 +342,37 @@ if __name__=='__main__':
   # axis([0,mysize[1], mysize[0], 0])
 
 
+  VV = (mgrid[0:201:1.0]-100)*0.02
+
   ## Plot the texture coordinates
   # ll = 200
   ll  = (np.abs(uv)).max()
   subplot
   subplot(2,2,2)
   title('u coordinate (algebric)')
-  imshow(uv[:,:,0], interpolation='nearest', vmin=-ll, vmax=ll)
+  # imshow(uv[:,:,0], interpolation='nearest', vmin=-ll, vmax=ll)
+  contourf(uv[:,:,0], VV, cmap=cm.gray)
   axis([0,mysize[1], mysize[0], 0])
   subplot(2,2,4)
   title('v coordinate (algebric)')
-  imshow(uv[:,:,1], interpolation='nearest', vmin=-ll, vmax=ll)
+  # imshow(uv[:,:,1], interpolation='nearest', vmin=-ll, vmax=ll)
+  contourf(uv[:,:,1], VV, cmap=cm.gray)
   axis([0,mysize[1], mysize[0], 0])
 
   subplot(2,2,3)
-  imshow(disparity, interpolation='nearest', vmin=420, vmax=560)
+  title('Simulated disparity measurements')
+  #imshow(disparity, interpolation='nearest', vmin=420, vmax=560)
+  imshow(disparity, interpolation='nearest', vmin=420, vmax=560, cmap=my_cmap)
   # contourf(disparity)
   axis([0,mysize[1], mysize[0], 0])
 
   # figure(2)
   # title('UV mesh view', fontweight = 'bold', size=20)
-  # VV = (mgrid[0:201:1.0]-100)*2.0
-  # contour(uv[:,:,0],VV)
-  # contour(uv[:,:,1],VV)
+  # #VV = (mgrid[0:201:1.0]-100)*2.0
+  # VV = (mgrid[0:2001:1.0]-1000)*0.005
+  # matplotlib.rcParams['contour.negative_linestyle'] = 'solid'
+  # contour(uv[:,:,0],VV, colors='k')
+  # contour(uv[:,:,1],VV, colors='k')
   # axis('equal')
   # axis([0,mysize[1], mysize[0], 0])
 
