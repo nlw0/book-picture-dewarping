@@ -22,7 +22,7 @@ rc('image', cmap='RdBu')
 #rc('image', cmap='RdYlBu')
 
 
-def pcyl_funL(d, p, f=1e2, k=5e-2):
+def pcyl_funL(d, p, k=5e-2):
   '''Calculates distances from a parabolic cylinder, with perspectve distortion.'''
   # { (x,y,z) = tau * d + p
   # { z = k * x**2
@@ -62,13 +62,51 @@ def pcyl_funL(d, p, f=1e2, k=5e-2):
   return out
 
 
+
+
+
+def trig_funL(d, p, k=0.01):
+  '''Calculates distances from a sinusoidal surface, with perspectve distortion.'''
+  # { (x,y,z) = tau * d + p
+  # { z = k * cos(x)
+
+  # This must be solved by an iterative technique. In this case,
+  # Newthon's method did the trick. It's just crazy. Don't try this at
+  # home with your dad's stereo. Only with a hip-hop supervision,
+  # allright?
+
+  # This assumes the whole plane is on the camera sight, and no line
+  # crosses the surface twice.
+
+  out = 1e6*ones(d.shape)
+
+  ## First approximation is z ~ 0, ergo
+  tau = -p[2]/d[:,2]
+
+  Niter = 3
+  for k in range(Niter):
+    fx = k * cos(tau*d[:,0] + p[0]) - tau*d[:,2] - p[2]
+    flx = -k*d[:,0]*sin(tau*d[:,0] + p[0]) - d[:,2]
+    dec = fx/flx
+    tau = tau - dec
+
+  out = p + c_[tau,tau,tau]*d
+
+  errz = np.abs(out[:,2]) > 1.1*k
+  tau[errz] = -p[2]/d[:,2]
+  out[errz] = p + c_[tau[errz],tau[errz],tau[errz]]*d[errz]
+
+  return out
+
+
+
 def parabola_length(x,k):
   return 0.5*(x*sqrt(4*k**2*x**2+1)+log(2*k*x+sqrt(4*k**2*x**2+1))*0.5/k)
 def pcyl_get_texture_coordinates(verticesW,k):
   return c_[parabola_length(verticesW[:,0],k), verticesW[:,1]]
 
 
-def cone_funL(d, p, f=1e2, k=5e-2):
+def cone_funL(d, p, k=5e-2):
   '''Calculates distances from a cone. Symmetri axis is over y direction.'''
   ## First try
   a = d[:,0]**2 - k*d[:,1]**2 + d[:,2]**2
@@ -130,8 +168,9 @@ if __name__=='__main__':
   ## parabolic cylinder model. This affects the functions used in
   ## calculations, and also the default scene parameters.
   #model_type = 'cone'
-  model_type = 'pcyl'
-  ex_case = 1
+  #model_type = 'pcyl'
+  model_type = 'trig'
+  ex_case = 0
 
   ## mysize: Image size in pixels
   ## f: Focal distance, in pixels
@@ -142,6 +181,9 @@ if __name__=='__main__':
   elif model_type == 'pcyl':
     funL = pcyl_funL
     get_texture_coordinates = pcyl_get_texture_coordinates
+  elif model_type == 'trig':
+    funL = trig_funL
+    get_texture_coordinates = cone_get_texture_coordinates
   else:
     raise TypeError
 
@@ -181,6 +223,15 @@ if __name__=='__main__':
       phi = 22*pi/180
       psi = 40*pi/180
       k = 9e-1
+  elif model_type == 'trig':
+    if ex_case == 0:
+      mysize=(480,640)
+      f = mysize[0]/1.
+      p = array([1,0,-9.])
+      theta = 10*pi/180
+      phi = 10*pi/180
+      psi = 1*pi/180
+      k = 0.0001
   else:
     raise TypeError
 
@@ -206,7 +257,7 @@ if __name__=='__main__':
   d = dot(pix.reshape(mysize[0]*mysize[1],3),R)
 
   ## Calculate World coordinates of each pixel measurement.
-  verticesW = funL(d, p, f=f, k=k)
+  verticesW = funL(d, p, k=k)
 
   ## Find (again...) the valid measurements.
   where = verticesW[:,2]<1e6
