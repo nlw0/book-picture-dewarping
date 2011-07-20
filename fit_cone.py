@@ -156,8 +156,10 @@ if __name__ == '__main__':
   ## Generate data for testing cone fitting.
   op = reshape(.0+mgrid[10:13,0:1,-20:-17].T,(-1,3))
   op[:,1] = sqrt(op[:,0]**2+op[:,2]**2)
-  trans = array([2,10,3])
-  Q = array([0.1,0.02,0.02])
+  trans = array([2,1,10])
+  # Q = array([0.1,0.02,0.02])
+  # trans = array([0,0,0])
+  Q = array([0,0,0])
   R = quaternion_to_matrix(Q)
   p = dot(op,R)+trans
 
@@ -182,11 +184,19 @@ if __name__ == '__main__':
   print '***'
   print 'Testing Optimiztion...'
 
-  s0 = [1, 0, 0, 0, 0, 0]
-  print 's0: ', s0
-  print distance_func(s0,p)
+  n_elev = arctan2(n_ok[1], sqrt(n_ok[0]**2+n_ok[2]**2))
+  n_azim = arctan2(n_ok[2], n_ok[0])
+  a_zeni = n_elev
+  a_azim = 0
+ 
+  s0 = array([10.0, 0, n_elev, n_azim, a_zeni, a_azim])
 
-  sop = scipy.optimize.fmin(objective_func, s0, args=(p,))
+  print
+  print 's0: ', array_str(s0, precision=2)
+  print array_str(distance_func(s0,p), precision=2)
 
-  print 'sop: ', sop
-  print distance_func(sop,p)
+  sop = scipy.optimize.fmin(objective_func, s0, args=(p,), xtol=1e-10,ftol=1e-10, maxfun=10000)
+
+  print
+  print 'sop: ', array_str(sop, precision=2)
+  print array_str(distance_func(sop,p), precision=2)

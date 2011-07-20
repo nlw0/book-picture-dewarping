@@ -16,7 +16,7 @@ from pylab import *
 
 from scipy.special import ellipeinc
 
-import lilutils
+#import lilutils
 
 
 ion()
@@ -313,7 +313,8 @@ if __name__=='__main__':
 
 
 
-  figure(1, figsize=(16,12))
+  #figure(1, figsize=(16,12))
+  figure(1, figsize=(11,8))
   suptitle('Sinusoidal surface ranging and mapping coords',
            fontweight='bold', fontsize=20)
 
@@ -328,21 +329,22 @@ if __name__=='__main__':
   # axis('equal')
   # axis([0,mysize[1], mysize[0], 0])
 
-  VV = (mgrid[0:201:1.0]-100)*0.02
+  VV = 1e6+(mgrid[0:401:1.0]-200)*0.01
 
   ## Plot the texture coordinates
   # ll = 200
+  uv = uv+1e6
   ll  = (np.abs(uv)).max()
   subplot
   subplot(2,2,2)
   title('u coordinate (algebric)')
   # imshow(uv[:,:,0], interpolation='nearest', vmin=-ll, vmax=ll)
-  contourf(uv[:,:,0], VV, cmap=cm.gray)
+  contour(uv[:,:,0], VV, colors='k')
   axis([0,mysize[1], mysize[0], 0])
   subplot(2,2,4)
   title('v coordinate (algebric)')
   # imshow(uv[:,:,1], interpolation='nearest', vmin=-ll, vmax=ll)
-  contourf(uv[:,:,1], VV, cmap=cm.gray)
+  contour(uv[:,:,1], VV, colors='k')
   axis([0,mysize[1], mysize[0], 0])
 
   subplot(2,2,3)
@@ -361,9 +363,9 @@ if __name__=='__main__':
   # axis('equal')
   # axis([0,mysize[1], mysize[0], 0])
 
-  mypath =  'sim_output/%s-%02d/'%(model_type, ex_case)
-  lilutils.ensure_dir(mypath)
+  # mypath =  'sim_output/%s-%02d/'%(model_type, ex_case)
+  # #lilutils.ensure_dir(mypath)
 
-  savetxt(mypath+'params.txt', [f, p[0], p[1], p[2], theta, phi, psi, k])
-  savetxt(mypath+'disparity.txt', disparity, '%d')
-  savez(mypath+'coords', vertices=vertices, uv=uv)
+  # savetxt(mypath+'params.txt', [f, p[0], p[1], p[2], theta, phi, psi, k])
+  # savetxt(mypath+'disparity.txt', disparity, '%d')
+  # savez(mypath+'coords', vertices=vertices, uv=uv)
