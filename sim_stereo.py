@@ -12,31 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 from pylab import *
 
 from scipy.special import ellipeinc
 
+import lilutils
+
+
 ion()
-
-
-
 
 rc('image', cmap='RdBu')
 #rc('image', cmap='RdYlBu')
-
-from pylab import *
-cdict = {'red': ((0.0, 1.0, 1.0),
-                 (0.5, 0.0, 0.0),
-                 (1.0, 1.0, 1.0)),
-         'green': ((0.0, 0.0, 0.0),
-                   (0.5, 0.0, 0.0),
-                   (1.0, 1.0, 1.0)),
-         'blue': ((0.0, 0.0, 0.0),
-                  (0.5, 1.0, 1.0),
-                  (1.0, 1.0, 1.0))}
-my_cmap = matplotlib.colors.LinearSegmentedColormap('my_colormap',cdict,256)
-
 
 def pcyl_funL(d, p, k=5e-2):
   '''Calculates distances from a parabolic cylinder, with perspectve distortion.'''
@@ -171,12 +157,13 @@ def trig_funL(d, p, k=0.01):
 
   return out
 
-def sin_length(phi,m,omega):
-  return ellipeinc(pi/2+omega*phi, m/(1+m) )*sqrt(1+m)/omega
+def sin_length(phi,k,omega):
+  ## The length of a sinusoid is a classic calculus problem that falls into an elliptic integral.
+  m = 1 + k**2 * omega**2
+  return ellipeinc(pi/2+omega*phi, 1-1/m )*sqrt(m)/omega
 def trig_get_texture_coordinates(verticesW,k):
   omega = 80
-  m = k**2 * omega**2
-  return c_[ sin_length(verticesW[:,0],m,omega) , verticesW[:,1]]
+  return c_[ sin_length(verticesW[:,0],k,omega) , verticesW[:,1]]
 
 
 
@@ -269,7 +256,7 @@ if __name__=='__main__':
       f = mysize[0]/1.
       p = array([-1,0,-.57])
       theta = 3*pi/180
-      phi = 15*pi/180
+      phi = 12*pi/180
       psi = -3*pi/180
       k = 0.01
   else:
@@ -341,7 +328,6 @@ if __name__=='__main__':
   # axis('equal')
   # axis([0,mysize[1], mysize[0], 0])
 
-
   VV = (mgrid[0:201:1.0]-100)*0.02
 
   ## Plot the texture coordinates
@@ -361,8 +347,7 @@ if __name__=='__main__':
 
   subplot(2,2,3)
   title('Simulated disparity measurements')
-  #imshow(disparity, interpolation='nearest', vmin=420, vmax=560)
-  imshow(disparity, interpolation='nearest', vmin=420, vmax=560, cmap=my_cmap)
+  imshow(disparity, interpolation='nearest', vmin=420, vmax=560)
   # contourf(disparity)
   axis([0,mysize[1], mysize[0], 0])
 
@@ -376,6 +361,9 @@ if __name__=='__main__':
   # axis('equal')
   # axis([0,mysize[1], mysize[0], 0])
 
-  savetxt('params.txt', [f, p[0], p[1], p[2], theta, phi, psi, k])
-  savetxt('disparity.txt', disparity, '%d')
-  savez('coords', vertices=vertices, uv=uv)
+  mypath =  'sim_output/%s-%02d/'%(model_type, ex_case)
+  lilutils.ensure_dir(mypath)
+
+  savetxt(mypath+'params.txt', [f, p[0], p[1], p[2], theta, phi, psi, k])
+  savetxt(mypath+'disparity.txt', disparity, '%d')
+  savez(mypath+'coords', vertices=vertices, uv=uv)
