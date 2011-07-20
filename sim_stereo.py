@@ -363,9 +363,9 @@ if __name__=='__main__':
   # axis('equal')
   # axis([0,mysize[1], mysize[0], 0])
 
-  # mypath =  'sim_output/%s-%02d/'%(model_type, ex_case)
-  # #lilutils.ensure_dir(mypath)
+  mypath =  'sim_output/%s-%02d/'%(model_type, ex_case)
+  lilutils.ensure_dir(mypath)
 
-  # savetxt(mypath+'params.txt', [f, p[0], p[1], p[2], theta, phi, psi, k])
-  # savetxt(mypath+'disparity.txt', disparity, '%d')
-  # savez(mypath+'coords', vertices=vertices, uv=uv)
+  savetxt(mypath+'params.txt', [f, p[0], p[1], p[2], theta, phi, psi, k])
+  savetxt(mypath+'disparity.txt', disparity, '%d')
+  savez(mypath+'coords', vertices=vertices, uv=uv)

@@ -71,19 +71,14 @@ def quaternion_to_matrix(myx):
 
 
 def estimate_normal(p):
-  '''Estimate the normal direction of a plane fitted to a set of points. It
-  asserts that the points are minimally planar. (Maybe it shouldn't.)'''
+  '''Estimate the normal direction of a plane fitted to a set of points. Does
+  not test the plane fit, just return the direction that looks good.'''
   pmean = p.mean(0)
   pnorm = p-pmean
   sig = sqrt((pnorm**2).sum())
   pnorm = (p-pmean)/sig
   MP = c_[pnorm, ones(p.shape[0])]
   U, s, Vh = svd( MP  )
-  ## Asserts data fits well into a plane. Last singular value should be 'zero'
-  ## for a plane. Of course you should be way more generous if you are fitting
-  ## curved surfaces such as in this project.
-  print s
-  assert s[-1] < s[-2] * 2e-2
 
   ## Solution is taken from the last right singular vector. Its last value is
   ## also supposed to be close to zero due to subtracting mean form vectors, but
@@ -94,15 +89,14 @@ def estimate_normal(p):
   return sol
 
 def fit_cone(p):
-  normal = estimate_normal(p)
-
-  rho = mean(dot(p, normal) )
+  n = estimate_normal(p)
+  rho = mean(dot(p, n) )
 
   if rho <0:
     rho = -rho
-    normal = -normal
+    n = -n
 
-  return rho, normal
+  return rho, n
 
 
 def distance_func(x,p):
@@ -131,35 +125,57 @@ def distance_func(x,p):
   return d
 
 def objective_func(s,p):
-  return numpy.abs(distance_func(s,p)).max()
+  ## Maximum absolute error
+  #return numpy.abs(distance_func(s,p)).max()
+  ## Mean squared error
+  return (distance_func(s,p)**2).sum()
 
 
 
-if __name__ == '__main__':
-  ## Generate some data for testing norm estimation (not quite plane
-  ## fitting, one parameter missing). Nine coplanar points in a
-  ## square, rotated and translated.
+def generate_cone_points(L, T):
+  #op = reshape(.0+mgrid[-1:2,0:1,-L-1:-L+2].T,(-1,3))
+  op = reshape(.0+mgrid[-2:3,0:1,-L-2:-L+3].T,(-1,3))
+  op[:,1] = sqrt(op[:,0]**2+op[:,2]**2)
+  trans1 = array([0,-L,L])
+  Q1 = array([sin(pi/8),0.,0.])
+  R1 = quaternion_to_matrix(Q1)
+  p = dot(op+trans1,R1)
+  trans2 = array([0,0,T])
+  Q2 = array([0.,0.,0.])
+  R2 = quaternion_to_matrix(Q2)
+  p = dot(p,R2)+trans2
+  return p
+
+def test_normal():
+  ##############################################################################
+  ## Test normal estimation (not quite plane fitting, one parameter missing).
+
+  ## Generate some data. Nine coplanar points in a square, rotated and
+  ## translated.
   op = reshape(mgrid[-1:2,0:1,-1:2].T,(-1,3))
   trans = array([2,1,3])
   Q = array([0.1,0.02,0.02])
   R = quaternion_to_matrix(Q)
   p = dot(op,R)+trans
+
+  ## Calculate answer by rotating y vector.
   n_ok = dot( array([0,1,0]), R)
 
   ## Estimate norm...
   sol = estimate_normal(p)
   assert np.abs(sign(sol[0])*sign(n_ok[0])*sol - n_ok).max()<1e-15
 
-  print sol
   print n_ok
+  print sol
 
-  ## Generate data for testing cone fitting.
+  ##############################################################################
+  ## Test just surface fitting to a set of cone points...
+
+  ## Generate data
   op = reshape(.0+mgrid[10:13,0:1,-20:-17].T,(-1,3))
   op[:,1] = sqrt(op[:,0]**2+op[:,2]**2)
-  trans = array([2,1,10])
-  # Q = array([0.1,0.02,0.02])
-  # trans = array([0,0,0])
-  Q = array([0,0,0])
+  trans = array([2,1,3])
+  Q = array([0.1,0.02,0.02])
   R = quaternion_to_matrix(Q)
   p = dot(op,R)+trans
 
@@ -175,28 +191,75 @@ if __name__ == '__main__':
   print n_ok
   print sol
 
+if __name__ == '__main__':
+  ##############################################################################
+  ## Now test the cone fitting procedure.
 
-  rho, normal = fit_cone(p)
+  ## Generate data
+  L = 10 ## Create points around (0,-L,-L)
+  T = 10 ## Translate to make the points this far from
 
-  print rho, normal
+  p = generate_cone_points(L,T)
+  rho, n = fit_cone(p)
+
+  ## First approximation
+  print '\n***'
+  print 'First approximation'
+  print 'rho:', rho
+  print 'normal:', n
 
   ## Testing optimiztion
-  print '***'
-  print 'Testing Optimiztion...'
+  print '\n***'
+  print 'Testing Optimization...'
 
-  n_elev = arctan2(n_ok[1], sqrt(n_ok[0]**2+n_ok[2]**2))
-  n_azim = arctan2(n_ok[2], n_ok[0])
-  a_zeni = n_elev
+  # s0 = array([.0, L, 0,0,0,0])
+  # n_elev = arctan2(n[1], sqrt(n[0]**2+n[2]**2))
+  # n_azim = arctan2(n[2], n[0])
+  # a_zeni = n_elev-.75*pi
+  # a_azim = 0
+  n_elev = 0
+  n_azim = 0
+  a_zeni = n_elev-.75*pi
   a_azim = 0
- 
-  s0 = array([10.0, 0, n_elev, n_azim, a_zeni, a_azim])
+  #s0 = array([0, rho, n_elev, n_azim, a_zeni, a_azim])
+  s0 = array([sqrt(.5)/L, L, n_elev, n_azim, a_zeni, a_azim])
 
   print
   print 's0: ', array_str(s0, precision=2)
-  print array_str(distance_func(s0,p), precision=2)
+  print array_str(sort(numpy.abs(distance_func(s0,p))[-1::-1]), precision=2)
+  print '=>', objective_func(s0,p)
 
-  sop = scipy.optimize.fmin(objective_func, s0, args=(p,), xtol=1e-10,ftol=1e-10, maxfun=10000)
+  sop = scipy.optimize.fmin(objective_func, s0, args=(p,), xtol=1e-15,ftol=1e-15, maxfun=10000, maxiter=10000)
 
   print
   print 'sop: ', array_str(sop, precision=2)
-  print array_str(distance_func(sop,p), precision=2)
+  print array_str(sort(numpy.abs(distance_func(sop,p)))[-1::-1], precision=2)
+  print '=>', objective_func(sop,p)
+
+  print
+  print 'k err: %5.3f%%'%((1/(sqrt(2)*L*sop[0])-1)*100)
+  print 'rho: %5.3f'%sop[1]
+  print 'rhofromk: %5.3f'% (1/(sqrt(2)*sop[0])) 
+
+  print 70*'='
+
+
+ 
+  # print 'Wild tests'
+  # print ' rho   rhoe             rhoe2   k ke'
+
+  # for L in range(5, 100, 5):
+  #   T=L
+  #   p = generate_cone_points(L,T)
+  #   rho, n = fit_cone(p)
+  #   s0 = array([0, rho, 0,0,pi,pi])
+  #   s0 = array([sqrt(.5)/L, L, 0,0,-.75*pi,0 ])
+  #   sop = scipy.optimize.fmin(objective_func, s0, args=(p,), xtol=1e-10,ftol=1e-10, maxfun=10000, disp=False)
+  #   rhoe=sop[1]
+  #   ke = 1/sop[0]
+
+  #   err = objective_func(sop , p)
+  #   sopop = array([sqrt(.5)/L, L, 0,0,-.75*pi,0 ])
+  #   myerr = objective_func(sopop , p)
+
+  #   print '% 4d %6.2f %10.2f (%11.3f%%) %5.3f %5.3f %5.3f %5.3f '%(L,rhoe,ke*sqrt(.5),(1./(sqrt(2)*L*sop[0])-1)*100, sqrt(.5)/L, sop[0], err, myerr)
