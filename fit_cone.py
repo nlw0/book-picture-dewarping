@@ -13,6 +13,12 @@
 # limitations under the License.
 
 from pylab import *
+import pdb
+
+from scipy.optimize import fmin
+import scipy
+import numpy
+
 
 ################################################################################
 ## This gets the tree last parameters from the quaternion and maps it into
@@ -110,18 +116,23 @@ def distance_func(x,p):
   n = array([cos(n_elev)*sin(n_azim),
              sin(n_elev),
              cos(n_elev)*cos(n_azim)])
-  a = array([sin(a_elev)*sin(a_azim),
+  a = array([sin(a_zeni)*sin(a_azim),
              cos(a_zeni),
-             sin(a_elev)*cos(a_azim)])
+             sin(a_zeni)*cos(a_azim)])
 
   p_hat = p-rho*n
 
-  nXa2 = coss(n,a)**2
-  d = ((k/2 * (nXa2 * dot(p_hat, p_hat) - dot(p_hat, a)**2)
+  nXa2 = (cross(n,a)**2).sum()
+  # pdb.set_trace()
+  d = ((k/2 * (nXa2 * (p_hat**2).sum(1) - dot(p_hat, a)**2)
         - dot(p_hat, n) * nXa2)
        / (k * dot(p_hat,a) * dot(n,a) + nXa2))
 
   return d
+
+def objective_func(s,p):
+  return numpy.abs(distance_func(s,p)).max()
+
 
 
 if __name__ == '__main__':
@@ -145,7 +156,7 @@ if __name__ == '__main__':
   ## Generate data for testing cone fitting.
   op = reshape(.0+mgrid[10:13,0:1,-20:-17].T,(-1,3))
   op[:,1] = sqrt(op[:,0]**2+op[:,2]**2)
-  trans = array([2,1,3])
+  trans = array([2,10,3])
   Q = array([0.1,0.02,0.02])
   R = quaternion_to_matrix(Q)
   p = dot(op,R)+trans
@@ -166,3 +177,16 @@ if __name__ == '__main__':
   rho, normal = fit_cone(p)
 
   print rho, normal
+
+  ## Testing optimiztion
+  print '***'
+  print 'Testing Optimiztion...'
+
+  s0 = [1, 0, 0, 0, 0, 0]
+  print 's0: ', s0
+  print distance_func(s0,p)
+
+  sop = scipy.optimize.fmin(objective_func, s0, args=(p,))
+
+  print 'sop: ', sop
+  print distance_func(sop,p)
