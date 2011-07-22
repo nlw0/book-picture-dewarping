@@ -17,36 +17,33 @@ from pylab import *
 from fit_cone import *
 
 from  scipy.optimize import leastsq
+ion()
 
 def fitfunc(u, M):
-  Ned = M.shape[0]-3
-  R = zeros((1,Ned))
+  Ned = (M.shape[1]-3)/2
+  R = zeros(Ned+3)
   D = dot(u,M)**2
-  print 'ds',D.shape
-  print 'rs',R.shape
-  R[0,:Ned] = D[0,0:Ned*2:2]+D[0,1:Ned*2:2]
-  R[0,-3:] = D[0,-3:]
+  R[:Ned] = D[0:-3:2]+D[1:-3:2]
+  R[-3:] = D[-3:]
   return R
 
 def devfunc(u, M):
   return 2*dot(u,M)
 
-def errfunc(u, M, d_x):
-  print d_x.shape
-  print fitfunc(u, M).shape
-  fitfunc(u, M) - d_x
+errfunc = lambda u, M, d_x: fitfunc(u, M) - d_x
 
-if __name__ == '__main__':
-  k = 5.0
-  tt = pi/8
+
+def coisa_o_trem(k,tt):
   x = generate_cyl_points(k,tt)
 
 
   Np = 9
   con = array([[0,1],[0,3],[1,2],[1,4],[2,5],[3,4],[3,6],
-               [4,5],[4,7],[5,8],[6,7],[7,8],], dtype=uint8)
+               [4,5],[4,7],[5,8],[6,7],[7,8],[0,4],[2,4],[4,6],[4,8]], dtype=uint8)
   Ned = con.shape[0]
 
+  print 'Np', Np
+  print 'Ned', Ned
 
 
   M = zeros((2*Np, 2*Ned+3))
@@ -59,16 +56,45 @@ if __name__ == '__main__':
     M[b*2,2*i] = -1
     M[a*2+1,2*i+1] = 1
     M[b*2+1,2*i+1] = -1
-    d_x[i] = linalg.norm(x[a]-x[b])
+    d_x[i] = ((x[a]-x[b])**2).sum()
 
-  M[1,-3] = 1
-  M[2,-2] = 1
-  M[4,-1] = 1
+  M[0,-3] = 1
+  M[1,-2] = 1
+  M[3,-1] = 1
+
+  print 'Ms', M.shape
 
 
   ## Start as a square mesh, with first point centered and second over x axis
-  u0 = reshape(x[:,[0,2]]-x[0,[0,2]], (1,-1))
-  u0 = u0 - u0[0]
+  u0 = reshape(x[:,[0,2]]-x[0,[0,2]],-1)
+
+
+  fitfunc(u0, M)
 
   ## Fit this baby
-  u_opt, success = scipy.optimize.leastsq(errfunc, u0[:], args=(M, d_x,))
+  u_opt, success = scipy.optimize.leastsq(errfunc, u0, args=(M, d_x,))
+
+  final_err = (errfunc(u_opt, M, d_x)**2).sum()
+  print 'final err:', final_err
+
+  return (reshape(u_opt,(-1,2)), con)
+
+
+
+
+
+
+if __name__ == '__main__':
+  figure(1)
+  for en,k in enumerate([ 100,4,3 ]):
+    ua, con = coisa_o_trem(k, pi+pi/8)
+    Ned = con.shape[0]
+    for i in range(Ned-4):
+      plot( ua[con[i],0], ua[con[i],1],     'bgrcmykw'[en])
+  title('Cylinder dewarping with simple distance model, different curvatures')
+  axis('equal')
+
+
+
+
+
