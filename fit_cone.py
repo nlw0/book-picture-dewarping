@@ -133,8 +133,8 @@ def objective_func(s,p):
 
 
 def generate_cone_points(L, T):
-  #op = reshape(.0+mgrid[-1:2,0:1,-L-1:-L+2].T,(-1,3))
-  op = reshape(.0+mgrid[-2:3,0:1,-L-2:-L+3].T,(-1,3))
+  op = reshape(.0+mgrid[-1:2,0:1,-L-1:-L+2].T,(-1,3))
+  #op = reshape(.0+mgrid[-2:3,0:1,-L-2:-L+3].T,(-1,3))
   op[:,1] = sqrt(op[:,0]**2+op[:,2]**2)
   trans1 = array([0,-L,L])
   Q1 = array([sin(pi/8),0.,0.])
@@ -144,6 +144,16 @@ def generate_cone_points(L, T):
   Q2 = array([0.,0.,0.])
   R2 = quaternion_to_matrix(Q2)
   p = dot(p,R2)+trans2
+  return p
+
+def generate_cyl_points(k,tt):
+  op = reshape(.0+mgrid[0:3,0:1,-1:2].T,(-1,3))/k
+  Q1 = array([0.,sin(tt/2),0.])
+  R1 = quaternion_to_matrix(Q1)
+  p1 = dot(op,R1)
+  p1[:,1] = sqrt(1-p1[:,0]**2)
+  R2 = R1.T
+  p = dot(p1,R2)*k
   return p
 
 def test_normal():
@@ -245,21 +255,21 @@ if __name__ == '__main__':
 
 
  
-  # print 'Wild tests'
-  # print ' rho   rhoe             rhoe2   k ke'
+  print 'Wild tests'
+  print ' rho   rhoe             rhoe2   k ke'
 
-  # for L in range(5, 100, 5):
-  #   T=L
-  #   p = generate_cone_points(L,T)
-  #   rho, n = fit_cone(p)
-  #   s0 = array([0, rho, 0,0,pi,pi])
-  #   s0 = array([sqrt(.5)/L, L, 0,0,-.75*pi,0 ])
-  #   sop = scipy.optimize.fmin(objective_func, s0, args=(p,), xtol=1e-10,ftol=1e-10, maxfun=10000, disp=False)
-  #   rhoe=sop[1]
-  #   ke = 1/sop[0]
+  for L in range(5, 100, 5):
+    T=L
+    p = generate_cone_points(L,T)
+    rho, n = fit_cone(p)
+    s0 = array([.1, rho, 0,0,-.75*pi,0])
+    #s0 = array([sqrt(.5)/L, L, 0,0,-.75*pi,0 ])
+    sop = scipy.optimize.fmin(objective_func, s0, args=(p,), xtol=1e-10,ftol=1e-10, maxfun=10000, disp=False)
+    rhoe=sop[1]
+    ke = 1/sop[0]
 
-  #   err = objective_func(sop , p)
-  #   sopop = array([sqrt(.5)/L, L, 0,0,-.75*pi,0 ])
-  #   myerr = objective_func(sopop , p)
+    err = objective_func(sop , p)
+    sopop = array([sqrt(.5)/L, L, 0,0,-.75*pi,0 ])
+    myerr = objective_func(sopop , p)
 
-  #   print '% 4d %6.2f %10.2f (%11.3f%%) %5.3f %5.3f %5.3f %5.3f '%(L,rhoe,ke*sqrt(.5),(1./(sqrt(2)*L*sop[0])-1)*100, sqrt(.5)/L, sop[0], err, myerr)
+    print '% 4d %6.2f %10.2f (%11.3f%%) %5.3f %5.3f %5.3f %5.3f '%(L,rhoe,ke*sqrt(.5),(1./(sqrt(2)*L*sop[0])-1)*100, sqrt(.5)/L, sop[0], err, myerr)
