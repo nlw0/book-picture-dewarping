@@ -14,6 +14,9 @@
 
 from pylab import *
 
+import pdb
+
+
 from fit_cone import *
 
 from  scipy.optimize import leastsq
@@ -33,13 +36,24 @@ def devfunc(u, M):
 errfunc = lambda u, M, d_x: fitfunc(u, M) - d_x
 
 
-def coisa_o_trem(k,tt):
+def execute_test(k,tt):
   x = generate_cyl_points(k,tt)
 
+  Np = x.shape[0]
+  q = 4
+  con=[]
+  for a in range(Np):
+    if a%q != (q-1):
+      con.append((a, a+1))
+    if a < (Np-q):
+      con.append((a, a+q))
+      if a%q != (q-1):
+        con.append((a, a+q+1))
 
-  Np = 9
-  con = array([[0,1],[0,3],[1,2],[1,4],[2,5],[3,4],[3,6],
-               [4,5],[4,7],[5,8],[6,7],[7,8],[0,4],[2,4],[4,6],[4,8]], dtype=uint8)
+  con=array(con, dtype=uint8)
+
+  print con
+
   Ned = con.shape[0]
 
   print 'Np', Np
@@ -50,7 +64,7 @@ def coisa_o_trem(k,tt):
   d_x = zeros(Ned+3)
 
   for i in range(Ned):
-    a,b, = con[i]
+    a,b = con[i]
 
     M[a*2,2*i] = 1
     M[b*2,2*i] = -1
@@ -66,10 +80,10 @@ def coisa_o_trem(k,tt):
 
 
   ## Start as a square mesh, with first point centered and second over x axis
-  u0 = reshape(x[:,[0,2]]-x[0,[0,2]],-1)
-
-
-  fitfunc(u0, M)
+  # u0 = reshape(x[:,[0,2]]-x[0,[0,2]],-1)
+  # u0 = reshape(x[:,[0,2]]-x[0,[0,2]],-1)
+  u0 = reshape(.0+mgrid[0:4,0:4].T,-1)
+  # pdb.set_trace()
 
   ## Fit this baby
   u_opt, success = scipy.optimize.leastsq(errfunc, u0, args=(M, d_x,))
@@ -77,24 +91,32 @@ def coisa_o_trem(k,tt):
   final_err = (errfunc(u_opt, M, d_x)**2).sum()
   print 'final err:', final_err
 
-  return (reshape(u_opt,(-1,2)), con)
-
-
-
-
-
+  return reshape(u0,(-1,2)), reshape(u_opt,(-1,2)), con, final_err
 
 if __name__ == '__main__':
-  figure(1)
-  for en,k in enumerate([ 100,4,3 ]):
-    ua, con = coisa_o_trem(k, pi+pi/8)
+  figure(1, figsize=[12,8])
+  suptitle('Cylinder dewarping with simple distance model, different curvatures', fontsize=20, fontweight='bold')
+
+  tt = pi/5
+  for en,k in enumerate([ .5, 1, 2, 3, 7]):
+    subplot(2,3,en+2)
+    u0, ua, con, err = execute_test(k, tt)
+    title('k = %d, err=%5.2f'%((100./k), err))
     Ned = con.shape[0]
-    for i in range(Ned-4):
-      plot( ua[con[i],0], ua[con[i],1],     'bgrcmykw'[en])
-  title('Cylinder dewarping with simple distance model, different curvatures')
+    for i in range(Ned):
+      plot( u0[con[i],0], u0[con[i],1], 'b-x')
+      plot( ua[con[i],0], ua[con[i],1], 'r-x')
+    grid()
+    axis('equal')
+    axis([-1, 4, -.75, 3.75])
+    xlim(-.75,3.75)
+
+  k = 2
+  x = generate_cyl_points(k,tt)
+  subplot(2,3,1)
+  title('Original xz coords, k=%d'%(100./k))
+  for i in range(Ned):
+    plot( x[con[i],0], x[con[i],2], 'g-x')
+  grid()
   axis('equal')
-
-
-
-
-
+  axis([-1, 4, -1.75, 2.75])

@@ -13,11 +13,11 @@
 # limitations under the License.
 
 from pylab import *
+import sys
 
 from scipy.special import ellipeinc
 
-#import lilutils
-
+import lilutils
 
 ion()
 
@@ -191,13 +191,13 @@ if __name__=='__main__':
   ## PARAM
   ## The 'input parameters'.
 
-  ## Choose either 'cone' for the cone model, or 'pcyl' for the
-  ## parabolic cylinder model. This affects the functions used in
-  ## calculations, and also the default scene parameters.
-  #model_type = 'cone'
-  #model_type = 'pcyl'
-  model_type = 'trig'
-  ex_case = 0
+  ## Choose either 'cone' for the cone model, 'pcyl' for the parabolic cylinder
+  ## model and 'trig' for the sinusoidal surface. This affects the functions
+  ## used in calculations, and also the default scene parameters.
+  if len(sys.argv)<3:
+    raise Exception('Incorrect number of parameters.\n\n\tUsage: %s <model_type> <case_number>'%(sys.argv[0]))
+  model_type = sys.argv[1]
+  ex_case = int(sys.argv[2])
 
   ## mysize: Image size in pixels
   ## f: Focal distance, in pixels
@@ -233,6 +233,8 @@ if __name__=='__main__':
       phi = 60*pi/180
       psi = 0*pi/180
       k = 1
+    else:
+      raise Exception('Inexistent model+case')
   elif model_type == 'pcyl':
     if ex_case == 0:
       mysize=(480,640)
@@ -242,7 +244,7 @@ if __name__=='__main__':
       phi = 8*pi/180
       psi = 10*pi/180
       k = 1e-3
-    if ex_case == 1:
+    elif ex_case == 1:
       mysize=(960,1280)
       f = mysize[0]*6.0
       p = 0.4*array([1.,0,-1.])
@@ -250,6 +252,8 @@ if __name__=='__main__':
       phi = 22*pi/180
       psi = 40*pi/180
       k = 9e-1
+    else:
+      raise Exception('Inexistent model+case')
   elif model_type == 'trig':
     if ex_case == 0:
       mysize=(480,640)
@@ -259,6 +263,8 @@ if __name__=='__main__':
       phi = 12*pi/180
       psi = -3*pi/180
       k = 0.01
+    else:
+      raise Exception('Inexistent model+case')
   else:
     raise TypeError
 
