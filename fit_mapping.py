@@ -42,19 +42,38 @@ class IntrinsicParameters:
     self.f = f
     self.center = center
 
-  def coordinates_from_disparity(self, disparity, output):
-    ## Incorrect, 'identity' implementation
-    output[:,2] = disparity
+  ## The magical formula that gives distance form the disparity. This is the
+  ## theoretical perfect model, a x**-1 expression.
+  def distance_from_disparity(self, d):
+    return 348.0 / (1091.5 - d)
+
+
+  def coordinates_from_disparity(self, disparity):
+    ## Calculate the world coordinates of each pixel.
+
+    ## Initialize the output matrix with pixel coordinates over image plane, on
+    ## camera reference frame.
+    output = zeros((disparity.shape[0]*disparity.shape[1], 3))
+    output[:,:2] = mgrid[:disparity.shape[1],:disparity.shape[0]].T.reshape(-1,2) - self.center
+    output[:,2] = self.f
+
+    ## Calculate z from disparity
+    z = self.distance_from_disparity(disparity.ravel())
+
+    #pdb.set_trace()
+    output[:,0] *= z / output[:,2]
+    output[:,1] *= z / output[:,2]
+    output[:,2] = z
+    return output
 
 class SquareMesh:
   def __init__(self, disparity, intparam):
     self.disparity = disparity
     self.intparam = intparam
     Np = self.disparity.shape[0]*self.disparity.shape[1]
-    self.xyz = zeros((Np,3))
 
   def generate_xyz_mesh(self):
-    self.intparam.coordinates_from_disparity(self.disparity.ravel(), self.xyz)
+    self.xyz = self.intparam.coordinates_from_disparity(self.disparity)
 
 if __name__ == '__main__':
 
@@ -73,23 +92,47 @@ Usage: %s <data_path>'''%(sys.argv[0]))
   ## Gete the name of directory that contains the data.
   data_path = '%s/'%(sys.argv[1])
 
-  print data_path+'params.txt' #[f, p[0], p[1], p[2], theta, phi, psi, k]
+  print data_path+'params.txt'
   print data_path+'disparity.txt'
 
+  # [f, p[0], p[1], p[2], theta, phi, psi, k]
   params_file = loadtxt(data_path+'params.txt')
   disparity = loadtxt(data_path+'disparity.txt')
+
+
+
 
   #imshow(mgrid[:100,:100][0])
   imshow(disparity, interpolation='nearest')
 
-  z = range_from_disparity(disparity)
+  ran = range_from_disparity(disparity)
 
   ## Plots the z values
   figure(1)
-  imshow(z, interpolation='nearest')
+  imshow(ran, interpolation='nearest')
 
-  mypar = IntrinsicParameters(300, array([200,200]))
+  #mypar = IntrinsicParameters(300, array([200,200]))
+  mypar = IntrinsicParameters(params_file[0], (array(disparity.shape)+1.0)/2)
   sqmesh = SquareMesh(disparity, mypar)
   sqmesh.generate_xyz_mesh()
 
-  print sqmesh.xyz
+  import mpl_toolkits.mplot3d.axes3d as p3
+
+  fig=figure(2)
+  ax = p3.Axes3D(fig)
+  x,y,z = sqmesh.xyz.T
+  x = x.reshape(disparity.shape)
+  y = y.reshape(disparity.shape)
+  z = z.reshape(disparity.shape)
+
+  ## For debugging, just use iamge coordinates "r and s" for x and y, and the disparity for z.
+  # x,y = mgrid[:disparity.shape[0],:disparity.shape[1]]
+  # z = disparity
+
+  P = 6
+  x = x[::P,::P]
+  y = y[::P,::P]
+  z = z[::P,::P]
+
+  ax.plot_wireframe(x,y,z)
+  ax.axis('equal')
