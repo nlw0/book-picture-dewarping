@@ -17,6 +17,10 @@ from pylab import *
 import sys
 import itertools
 
+
+import mpl_toolkits.mplot3d.axes3d as p3
+
+
 import pdb
 
 def range_from_disparity(d):
@@ -45,7 +49,7 @@ class IntrinsicParameters:
   ## The magical formula that gives distance form the disparity. This is the
   ## theoretical perfect model, a x**-1 expression.
   def distance_from_disparity(self, d):
-    return 348.0 / (1091.5 - d)
+    return 348.0 / (1091.5 - d + 50 )
 
 
   def coordinates_from_disparity(self, disparity):
@@ -61,8 +65,8 @@ class IntrinsicParameters:
     z = self.distance_from_disparity(disparity.ravel())
 
     #pdb.set_trace()
-    output[:,0] *= z / output[:,2]
-    output[:,1] *= z / output[:,2]
+    output[:,0] *= z / self.f
+    output[:,1] *= z / self.f
     output[:,2] = z
     return output
 
@@ -102,24 +106,25 @@ Usage: %s <data_path>'''%(sys.argv[0]))
 
 
 
-  #imshow(mgrid[:100,:100][0])
-  imshow(disparity, interpolation='nearest')
+  fig = plt.figure(figsize=plt.figaspect(.5))
+  fig.suptitle('Calculation of 3D coordinates from range data', fontsize=20, fontweight='bold')
 
-  ran = range_from_disparity(disparity)
+  ax = fig.add_subplot(1,2,1)
+  #p3.Axes3D(fig, rect = [.05, .2, .4, .6])
 
-  ## Plots the z values
-  figure(1)
-  imshow(ran, interpolation='nearest')
+  title('Kinect data (disparity)', fontsize=16)
+
+  cax = ax.imshow(disparity, interpolation='nearest')
+  #colorbar(cax)
 
   #mypar = IntrinsicParameters(300, array([200,200]))
-  mypar = IntrinsicParameters(params_file[0], (array(disparity.shape)+1.0)/2)
+  mypar = IntrinsicParameters(params_file[0], .5*(1+array([disparity.shape[1], disparity.shape[0]])))
   sqmesh = SquareMesh(disparity, mypar)
   sqmesh.generate_xyz_mesh()
 
-  import mpl_toolkits.mplot3d.axes3d as p3
 
-  fig=figure(2)
-  ax = p3.Axes3D(fig)
+  ax = p3.Axes3D(fig, rect = [.55, .2, .4, .6])
+  title('Square mesh on 3D space', fontsize=16)
   x,y,z = sqmesh.xyz.T
   x = x.reshape(disparity.shape)
   y = y.reshape(disparity.shape)
