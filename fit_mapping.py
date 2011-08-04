@@ -60,7 +60,26 @@ class SquareMesh:
     Np = self.disparity.shape[0]*self.disparity.shape[1]
 
   def generate_xyz_mesh(self):
+    ## Calculate the coordinate values.
     self.xyz = self.intparam.coordinates_from_disparity(self.disparity)
+
+    ## Calculate the connections.
+    Nl,Nk = self.disparity.shape
+    Ncon = 4 * (Nk - 1) * (Nl - 1) + Nk + Nl - 2
+    con = zeros((Ncon,2), dtype=uint8)
+
+    ## Loop through every pixel. Add connections when possible. Just either the
+    ## same-line pixel to the right, or any of the three 8-neighbours below.
+    i=0
+    for p in range(Nl*Nk):
+      ## TEST IF CONNECTION IS VALID AND ADD IT TO THE LIST. ** NOT IMPLEMENTED **
+      con[i,0] = 0
+      con[i,1] = 1
+
+
+
+
+
 
 if __name__ == '__main__':
 
@@ -136,3 +155,5 @@ Usage: %s <data_path>'''%(sys.argv[0]))
     ax.set_xlim3d(midx-mrang, midx+mrang)
     ax.set_ylim3d(midy-mrang, midy+mrang)
     ax.set_zlim3d(midz-mrang, midz+mrang)
+  ##
+  #############################################################################
