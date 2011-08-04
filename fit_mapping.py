@@ -23,12 +23,6 @@ import mpl_toolkits.mplot3d.axes3d as p3
 
 import pdb
 
-def range_from_disparity(d):
-  z = zeros(d.shape)
-  ## from http://mathnathan.com/2011/02/03/depthvsdistance/
-  z= 348.0/(1091 - d[:])
-  return z
-
 ## '#51c373', '#ea6949', '#a370ff' -> original 'G. color block rip-off' palette
 gucci_dict = {'red': ((0.0, 0x51/255., 0x51/255.,),
                       (0.5, 0xea/255., 0xea/255.,),
@@ -49,7 +43,14 @@ class IntrinsicParameters:
   ## The magical formula that gives distance form the disparity. This is the
   ## theoretical perfect model, a x**-1 expression.
   def distance_from_disparity(self, d):
-    return 348.0 / (1091.5 - d + 50 )
+    ## "identity" version
+    #return 1/(d/1e3)
+    # return 3e2-1./(d/5e1) ## for cone-00
+    # return 2-1./(d/5e3) ## for trig-00
+    return 2-1./(d/5e1) ## for trig-00
+    # return 1000-1/(d/1e5)
+    ## Correct version, inverse of the function from http://mathnathan.com/2011/02/03/depthvsdistance/
+    ## return 348.0 / (1091.5 - d)
 
 
   def coordinates_from_disparity(self, disparity):
@@ -107,7 +108,7 @@ Usage: %s <data_path>'''%(sys.argv[0]))
 
 
   fig = plt.figure(figsize=plt.figaspect(.5))
-  fig.suptitle('Calculation of 3D coordinates from range data', fontsize=20, fontweight='bold')
+  fig.suptitle('Calculation of 3D coordinates from range data (with quantization)', fontsize=20, fontweight='bold')
 
   ax = fig.add_subplot(1,2,1)
   #p3.Axes3D(fig, rect = [.05, .2, .4, .6])
@@ -123,21 +124,29 @@ Usage: %s <data_path>'''%(sys.argv[0]))
   sqmesh.generate_xyz_mesh()
 
 
-  ax = p3.Axes3D(fig, rect = [.55, .2, .4, .6])
+  ax = p3.Axes3D(fig, rect = [.55, .2, .4, .6], aspect='equal')
   title('Square mesh on 3D space', fontsize=16)
   x,y,z = sqmesh.xyz.T
   x = x.reshape(disparity.shape)
   y = y.reshape(disparity.shape)
   z = z.reshape(disparity.shape)
 
-  ## For debugging, just use iamge coordinates "r and s" for x and y, and the disparity for z.
-  # x,y = mgrid[:disparity.shape[0],:disparity.shape[1]]
-  # z = disparity
+  ## For debugging, just use image coordinates "r and s" for x and y, and the disparity for z.
+  #x,y = mgrid[:disparity.shape[0],:disparity.shape[1]]
+  #z = disparity
 
-  P = 6
+  P = 12
   x = x[::P,::P]
   y = y[::P,::P]
   z = z[::P,::P]
 
-  ax.plot_wireframe(x,y,z)
   ax.axis('equal')
+  ax.plot_wireframe(x,y,z)
+
+  mrang = max([x.max()-x.min(), y.max()-y.min(), z.max()-z.min()])/2
+  midx = (x.max()+x.min())/2
+  midy = (y.max()+y.min())/2
+  midz = (z.max()+z.min())/2
+  ax.set_xlim3d(midx-mrang, midx+mrang)
+  ax.set_ylim3d(midy-mrang, midy+mrang)
+  ax.set_zlim3d(midz-mrang, midz+mrang)
