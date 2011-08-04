@@ -174,20 +174,28 @@ def trig_get_texture_coordinates(verticesW,k):
 
 
 def disparity_from_range(z):
-  #d = zeros(z.shape, dtype=uint16)
-  d = zeros(z.shape, dtype=float)
+  d = zeros(z.shape, dtype=uint16)
+  # d = zeros(z.shape, dtype=float)
   ## "identity" function, for testing. Scaling is necessary because output is not floating-point.
   # d[:] = 1e4 * z
   # d[:] = 5e3* (1./(3e2-z)) #for cone-00
   # d[:] = 5e3* (1./(2-z)) #for trig-00
-  d[:] = 5e1* (1./(2-z)) #for trig-00
+  # d[:] = 5e1* (1./(2-z)) #for trig-00
 
   ## from http://mathnathan.com/2011/02/03/depthvsdistance/
-  #d[:] = floor(0.5+ 1091.5 - 348.0/z)
-
+  d[:] = floor(0.5+ 1091.5 - 348.0/z)
   return d
 
 
+def distance_from_disparity(d):
+  z = zeros(d.shape, dtype=float)
+  ## "identity" version
+  #return 1/(d/1e3)
+  # return 3e2-1./(d/5e1) ## for cone-00
+  # return 2-1./(d/5e3) ## for trig-00
+  # return 1000-1/(d/1e5)
+  ## Correct version, inverse of the function from http://mathnathan.com/2011/02/03/depthvsdistance/
+  return 348.0 / (1091.5 - d)
 
 
 
