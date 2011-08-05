@@ -66,15 +66,33 @@ class SquareMesh:
     ## Calculate the connections.
     Nl,Nk = self.disparity.shape
     Ncon = 4 * (Nk - 1) * (Nl - 1) + Nk + Nl - 2
-    con = zeros((Ncon,2), dtype=uint8)
+    self.con = zeros((Ncon,2), dtype=uint16)
 
     ## Loop through every pixel. Add connections when possible. Just either the
     ## same-line pixel to the right, or any of the three 8-neighbours below.
     i=0
     for p in range(Nl*Nk):
-      ## TEST IF CONNECTION IS VALID AND ADD IT TO THE LIST. ** NOT IMPLEMENTED **
-      con[i,0] = 0
-      con[i,1] = 1
+      ## If it's not in the last column, connect to right.
+      if (p + 1) % Nk:
+        self.con[i,0] = p
+        self.con[i,1] = p+1
+        i += 1
+      ## If it not in the last line
+      if p <  Nk * (Nl - 1):
+        ## If it's not in the first column, connect to lower right.
+        # if p % Nk:
+        #   self.con[i,0] = p
+        #   self.con[i,1] = p+Nk-1
+        #   i += 1
+        self.con[i,0] = p
+        self.con[i,1] = p+Nk
+        i += 1
+        ## If it's not in the last column, connect to lower right.
+        if (p + 1) % Nk:
+          self.con[i,0] = p
+          self.con[i,1] = p+Nk+1
+          i += 1
+
 
 
 
@@ -112,9 +130,16 @@ Usage: %s <data_path>'''%(sys.argv[0]))
   ## is just the middle of the image, and there is also no radial lens
   ## distortion.
   optical_center = .5*(1+array([disparity.shape[1], disparity.shape[0]]))
+  ## Focal distance
+  f = params_file[0]
+
+  ## scale down the image 6 times
+  disparity = disparity[::6,::6]
+  f = f/6
+  optical_center = optical_center/6
 
   ## Instantiate intrinsic parameters object.
-  mypar = IntrinsicParameters(params_file[0], optical_center)
+  mypar = IntrinsicParameters(f, optical_center)
   ## Instantiate mesh object, and calculate grid parameters in 3D from the
   ## disparity array and intrinsic parameters.
   sqmesh = SquareMesh(disparity, mypar)
@@ -125,10 +150,10 @@ Usage: %s <data_path>'''%(sys.argv[0]))
   y = y.reshape(disparity.shape)
   z = z.reshape(disparity.shape)
 
-  P = 6 ## 6 for trig-00
-  x = x[::P,::P]
-  y = y[::P,::P]
-  z = z[::P,::P]
+  # P = 6 ## 6 for trig-00
+  # x = x[::P,::P]
+  # y = y[::P,::P]
+  # z = z[::P,::P]
 
   #############################################################################
   ## Plot the disparity as an image
@@ -157,3 +182,7 @@ Usage: %s <data_path>'''%(sys.argv[0]))
     ax.set_zlim3d(midz-mrang, midz+mrang)
   ##
   #############################################################################
+
+    figure(2)
+    for p in sqmesh.con:
+      plot(sqmesh.xyz[p,0], sqmesh.xyz[p,1], 'b-')
