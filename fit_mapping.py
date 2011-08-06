@@ -104,7 +104,7 @@ if __name__ == '__main__':
   ion() ## Turn on real-time plotting
 
   ## Plot stuff or not?
-  do_plot = True
+  do_plot = False
 
   register_cmap(name='guc', data=gucci_dict)
   rc('image', cmap='guc')
@@ -154,6 +154,12 @@ Usage: %s <data_path>'''%(sys.argv[0]))
   # x = x[::P,::P]
   # y = y[::P,::P]
   # z = z[::P,::P]
+
+  ed_dist = zeros(sqmesh.con.shape[0])
+
+  for i,p in enumerate(sqmesh.con):
+    ed_dist[i] = sqrt(
+        (  (sqmesh.xyz[p[0]] - sqmesh.xyz[p[1]]) ** 2)).sum()
 
   #############################################################################
   ## Plot the disparity as an image
