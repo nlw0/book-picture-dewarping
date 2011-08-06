@@ -93,12 +93,9 @@ class SquareMesh:
           self.con[i,1] = p+Nk+1
           i += 1
 
-
-
-
-
-
-
+###############################################################################
+##
+##
 if __name__ == '__main__':
 
   ion() ## Turn on real-time plotting
@@ -155,11 +152,43 @@ Usage: %s <data_path>'''%(sys.argv[0]))
   # y = y[::P,::P]
   # z = z[::P,::P]
 
-  ed_dist = zeros(sqmesh.con.shape[0])
+  ## Length of each mesh edge.
+  ed_len = zeros(sqmesh.con.shape[0])
 
   for i,p in enumerate(sqmesh.con):
-    ed_dist[i] = sqrt(
-        (  (sqmesh.xyz[p[0]] - sqmesh.xyz[p[1]]) ** 2)).sum()
+    ed_len[i] = sqrt( ((sqmesh.xyz[p[0]] - sqmesh.xyz[p[1]]) ** 2 ).sum() )
+
+
+  ## Start to set up optimization stuff
+  Np = disparity.shape[0] * disparity.shape[1]
+  Ned = ed_len.shape[0]
+
+  M = zeros((2*Np, 2*Ned+3))
+  d_x = zeros(Ned+3)
+
+  for i in range(Ned):
+    a,b = con[i]
+
+    M[a*2,2*i] = 1
+    M[b*2,2*i] = -1
+    M[a*2+1,2*i+1] = 1
+    M[b*2+1,2*i+1] = -1
+    d_x[i] = ((x[a]-x[b])**2).sum()
+
+  M[0,-3] = 1
+  M[1,-2] = 1
+  M[3,-1] = 1
+
+  print 'Ms', M.shape
+
+
+
+
+
+
+
+
+
 
   #############################################################################
   ## Plot the disparity as an image
