@@ -151,8 +151,8 @@ Usage: %s <data_path>'''%(sys.argv[0]))
   # subsampling factor
   #sub = 200
   #sub = 100
-  #sub = 50
-  sub = 25
+  sub = 50
+  #sub = 25
 
   ## scale down the image 6 times
   disparity = disparity[::sub,::sub]
@@ -202,7 +202,9 @@ Usage: %s <data_path>'''%(sys.argv[0]))
   mdist = d_x.mean()
   ## Start as a square mesh, with first point centered and second over x axis
   # u0 = mdist * reshape(.0+mgrid[0:disparity.shape[1],0:disparity.shape[0]].T,-1)
+  ## Start using initial xy coordinates.
   u0 = reshape(sqmesh.xyz[:,:2] - sqmesh.xyz[0,:2] ,-1)
+  #u0 += .01 *random(u0.shape)
 
   ## Fit this baby
   u_opt, success = scipy.optimize.leastsq(errfunc, u0, args=(M, d_x,))
@@ -212,12 +214,6 @@ Usage: %s <data_path>'''%(sys.argv[0]))
 
   q0 = reshape(u0, (-1, 2)) # , reshape(u_opt,(-1,2)), final_err
   q_opt = reshape(u_opt, (-1, 2)) # , reshape(u_opt,(-1,2)), final_err
-
-
-
-
-
-
 
   #############################################################################
   ## Plot the disparity as an image
@@ -249,6 +245,8 @@ Usage: %s <data_path>'''%(sys.argv[0]))
 
     figure(2)
     for p in sqmesh.con:
+      q0 = reshape(u0,-1,2)
+      plot(sqmesh.xyz[p,0], sqmesh.xyz[p,1], 'g-')
       plot(sqmesh.xyz[p,0], sqmesh.xyz[p,1], 'b-')
     axis('equal')
     yla,ylb = ylim()
