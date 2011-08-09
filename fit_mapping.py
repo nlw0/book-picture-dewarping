@@ -14,6 +14,8 @@
 # limitations under the License.
 
 from pylab import *
+from fit_cone import *
+from  scipy.optimize import leastsq
 import sys
 import itertools
 
@@ -24,6 +26,21 @@ import mpl_toolkits.mplot3d.axes3d as p3
 from color_block import gucci_dict
 
 import pdb
+
+
+def fitfunc(u, M):
+  Ned = (M.shape[1]-3)/2
+  R = zeros(Ned+3)
+  D = dot(u,M)**2
+  R[:Ned] = D[0:-3:2]+D[1:-3:2]
+  R[-3:] = D[-3:]
+  return R
+
+def devfunc(u, M):
+  return 2*dot(u,M)
+
+errfunc = lambda u, M, d_x: fitfunc(u, M) - d_x
+
 
 class IntrinsicParameters:
   def __init__(self, f, center):
@@ -80,10 +97,10 @@ class SquareMesh:
       ## If it not in the last line
       if p <  Nk * (Nl - 1):
         ## If it's not in the first column, connect to lower right.
-        # if p % Nk:
-        #   self.con[i,0] = p
-        #   self.con[i,1] = p+Nk-1
-        #   i += 1
+        if p % Nk:
+          self.con[i,0] = p
+          self.con[i,1] = p+Nk-1
+          i += 1
         self.con[i,0] = p
         self.con[i,1] = p+Nk
         i += 1
@@ -101,7 +118,8 @@ if __name__ == '__main__':
   ion() ## Turn on real-time plotting
 
   ## Plot stuff or not?
-  do_plot = False
+  do_plot = True
+  # do_plot = False
 
   register_cmap(name='guc', data=gucci_dict)
   rc('image', cmap='guc')
@@ -130,10 +148,16 @@ Usage: %s <data_path>'''%(sys.argv[0]))
   ## Focal distance
   f = params_file[0]
 
+  # subsampling factor
+  #sub = 200
+  #sub = 100
+  #sub = 50
+  sub = 25
+
   ## scale down the image 6 times
-  disparity = disparity[::6,::6]
-  f = f/6
-  optical_center = optical_center/6
+  disparity = disparity[::sub,::sub]
+  f = f/sub
+  optical_center = optical_center/sub
 
   ## Instantiate intrinsic parameters object.
   mypar = IntrinsicParameters(f, optical_center)
@@ -152,28 +176,22 @@ Usage: %s <data_path>'''%(sys.argv[0]))
   # y = y[::P,::P]
   # z = z[::P,::P]
 
-  ## Length of each mesh edge.
-  ed_len = zeros(sqmesh.con.shape[0])
-
-  for i,p in enumerate(sqmesh.con):
-    ed_len[i] = sqrt( ((sqmesh.xyz[p[0]] - sqmesh.xyz[p[1]]) ** 2 ).sum() )
-
-
   ## Start to set up optimization stuff
   Np = disparity.shape[0] * disparity.shape[1]
-  Ned = ed_len.shape[0]
+  Ned = sqmesh.con.shape[0]
 
   M = zeros((2*Np, 2*Ned+3))
   d_x = zeros(Ned+3)
 
   for i in range(Ned):
-    a,b = con[i]
+    a,b = sqmesh.con[i]
 
     M[a*2,2*i] = 1
     M[b*2,2*i] = -1
     M[a*2+1,2*i+1] = 1
     M[b*2+1,2*i+1] = -1
-    d_x[i] = ((x[a]-x[b])**2).sum()
+    #d_x[i] = sqrt( ((sqmesh.xyz[a] - sqmesh.xyz[b]) ** 2 ).sum() )
+    d_x[i] = ( ((sqmesh.xyz[a] - sqmesh.xyz[b]) ** 2 ).sum() )
 
   M[0,-3] = 1
   M[1,-2] = 1
@@ -181,8 +199,19 @@ Usage: %s <data_path>'''%(sys.argv[0]))
 
   print 'Ms', M.shape
 
+  mdist = d_x.mean()
+  ## Start as a square mesh, with first point centered and second over x axis
+  # u0 = mdist * reshape(.0+mgrid[0:disparity.shape[1],0:disparity.shape[0]].T,-1)
+  u0 = reshape(sqmesh.xyz[:,:2] - sqmesh.xyz[0,:2] ,-1)
 
+  ## Fit this baby
+  u_opt, success = scipy.optimize.leastsq(errfunc, u0, args=(M, d_x,))
 
+  final_err = (errfunc(u_opt, M, d_x)**2).sum()
+  print 'final err:', final_err
+
+  q0 = reshape(u0, (-1, 2)) # , reshape(u_opt,(-1,2)), final_err
+  q_opt = reshape(u_opt, (-1, 2)) # , reshape(u_opt,(-1,2)), final_err
 
 
 
@@ -221,3 +250,14 @@ Usage: %s <data_path>'''%(sys.argv[0]))
     figure(2)
     for p in sqmesh.con:
       plot(sqmesh.xyz[p,0], sqmesh.xyz[p,1], 'b-')
+    axis('equal')
+    yla,ylb = ylim()
+    ylim(ylb,yla)
+
+    figure(3)
+    for p in sqmesh.con:
+      plot(q_opt[p,0], q_opt[p,1], 'r-')
+
+    axis('equal')
+    yla,ylb = ylim()
+    ylim(ylb,yla)
