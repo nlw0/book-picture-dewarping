@@ -46,6 +46,9 @@ class IntrinsicParameters:
   def __init__(self, f, center):
     self.f = f
     self.center = center
+  def subsample(self, sub):
+    self.f /= sub
+    self.center /= sub
 
   ## The magical formula that gives distance form the disparity. This is the
   ## theoretical perfect model, a x**-1 expression.
@@ -110,6 +113,48 @@ class SquareMesh:
           self.con[i,1] = p+Nk+1
           i += 1
 
+  def subsample(self, sub):
+    self.disparity = self.disparity[::sub,::sub]
+    self.intparam.subsample(sub)
+
+def run_optimization(sqmesh, u0):
+  ## Start to set up optimization stuff
+  Np = sqmesh.xyz.shape[0] #disparity.shape[0] * disparity.shape[1]
+  Ned = sqmesh.con.shape[0]
+
+  M = zeros((2*Np, 2*Ned+3))
+  d_x = zeros(Ned+3)
+
+  for i in range(Ned):
+    a,b = sqmesh.con[i]
+
+    M[a*2,2*i] = 1
+    M[b*2,2*i] = -1
+    M[a*2+1,2*i+1] = 1
+    M[b*2+1,2*i+1] = -1
+    #d_x[i] = sqrt( ((sqmesh.xyz[a] - sqmesh.xyz[b]) ** 2 ).sum() )
+    d_x[i] = ( ((sqmesh.xyz[a] - sqmesh.xyz[b]) ** 2 ).sum() )
+
+  M[0,-3] = 1
+  M[1,-2] = 1
+  M[3,-1] = 1
+
+  print 'Ms', M.shape
+
+  mdist = d_x.mean()
+  ## Start as a square mesh, with first point centered and second over x axis
+  # u0 = mdist * reshape(.0+mgrid[0:disparity.shape[1],0:disparity.shape[0]].T,-1)
+  ## Start using initial xy coordinates.
+  #u0 = reshape(sqmesh.xyz[:,:2] - sqmesh.xyz[0,:2] ,-1)
+  #u0 += .01 *random(u0.shape)
+
+  ## Fit this baby
+  u_opt, success = scipy.optimize.leastsq(errfunc, u0, args=(M, d_x,))
+
+  final_err = (errfunc(u_opt, M, d_x)**2).sum()
+
+  return u_opt, success, final_err
+
 ###############################################################################
 ##
 ##
@@ -148,68 +193,28 @@ Usage: %s <data_path>'''%(sys.argv[0]))
   ## Focal distance
   f = params_file[0]
 
-  # subsampling factor
-  #sub = 200
-  #sub = 100
-  sub = 50
-  #sub = 25
-
-  ## scale down the image 6 times
-  disparity = disparity[::sub,::sub]
-  f = f/sub
-  optical_center = optical_center/sub
-
   ## Instantiate intrinsic parameters object.
   mypar = IntrinsicParameters(f, optical_center)
   ## Instantiate mesh object, and calculate grid parameters in 3D from the
   ## disparity array and intrinsic parameters.
   sqmesh = SquareMesh(disparity, mypar)
+
+  # subsampling factor
+  #sub = 200
+  #sub = 100
+  sub = 50
+  #sub = 25
+  ## resample down the image 'sub' times
+  sqmesh.subsample(sub)
+
   sqmesh.generate_xyz_mesh()
 
-  x,y,z = sqmesh.xyz.T
-  x = x.reshape(disparity.shape)
-  y = y.reshape(disparity.shape)
-  z = z.reshape(disparity.shape)
-
-  # P = 6 ## 6 for trig-00
-  # x = x[::P,::P]
-  # y = y[::P,::P]
-  # z = z[::P,::P]
-
-  ## Start to set up optimization stuff
-  Np = disparity.shape[0] * disparity.shape[1]
-  Ned = sqmesh.con.shape[0]
-
-  M = zeros((2*Np, 2*Ned+3))
-  d_x = zeros(Ned+3)
-
-  for i in range(Ned):
-    a,b = sqmesh.con[i]
-
-    M[a*2,2*i] = 1
-    M[b*2,2*i] = -1
-    M[a*2+1,2*i+1] = 1
-    M[b*2+1,2*i+1] = -1
-    #d_x[i] = sqrt( ((sqmesh.xyz[a] - sqmesh.xyz[b]) ** 2 ).sum() )
-    d_x[i] = ( ((sqmesh.xyz[a] - sqmesh.xyz[b]) ** 2 ).sum() )
-
-  M[0,-3] = 1
-  M[1,-2] = 1
-  M[3,-1] = 1
-
-  print 'Ms', M.shape
-
-  mdist = d_x.mean()
-  ## Start as a square mesh, with first point centered and second over x axis
-  # u0 = mdist * reshape(.0+mgrid[0:disparity.shape[1],0:disparity.shape[0]].T,-1)
-  ## Start using initial xy coordinates.
+  #######################################################
+  ## Run the optimization
   u0 = reshape(sqmesh.xyz[:,:2] - sqmesh.xyz[0,:2] ,-1)
-  #u0 += .01 *random(u0.shape)
 
-  ## Fit this baby
-  u_opt, success = scipy.optimize.leastsq(errfunc, u0, args=(M, d_x,))
+  u_opt, success, final_err  = run_optimization(sqmesh,u0)
 
-  final_err = (errfunc(u_opt, M, d_x)**2).sum()
   print 'final err:', final_err
 
   q0 = reshape(u0, (-1, 2)) # , reshape(u_opt,(-1,2)), final_err
@@ -218,6 +223,11 @@ Usage: %s <data_path>'''%(sys.argv[0]))
   #############################################################################
   ## Plot the disparity as an image
   if do_plot:
+    x,y,z = sqmesh.xyz.T
+    x = x.reshape(sqmesh.disparity.shape)
+    y = y.reshape(sqmesh.disparity.shape)
+    z = z.reshape(sqmesh.disparity.shape)
+
     fig = plt.figure(figsize=plt.figaspect(.5))
     fig.suptitle('Calculation of 3D coordinates from range data (with quantization)', fontsize=20, fontweight='bold')
     ax = fig.add_subplot(1,2,1)
