@@ -99,14 +99,15 @@ class SquareMesh:
         i += 1
       ## If it not in the last line
       if p <  Nk * (Nl - 1):
-        ## If it's not in the first column, connect to lower right.
+        ## Connect to the point below
+        self.con[i,0] = p
+        self.con[i,1] = p+Nk
+        i += 1
+        ## If it's not in the first column, connect to lower left.
         if p % Nk:
           self.con[i,0] = p
           self.con[i,1] = p+Nk-1
           i += 1
-        self.con[i,0] = p
-        self.con[i,1] = p+Nk
-        i += 1
         ## If it's not in the last column, connect to lower right.
         if (p + 1) % Nk:
           self.con[i,0] = p
@@ -135,18 +136,18 @@ def run_optimization(sqmesh, u0):
     #d_x[i] = sqrt( ((sqmesh.xyz[a] - sqmesh.xyz[b]) ** 2 ).sum() )
     d_x[i] = ( ((sqmesh.xyz[a] - sqmesh.xyz[b]) ** 2 ).sum() )
 
-  M[0,-3] = 1
-  M[1,-2] = 1
-  M[3,-1] = 1
 
-  print 'Ms', M.shape
+  ## Find the "middle" point to make it the origin
+  mp = (sqmesh.disparity.shape[0]/2) * sqmesh.disparity.shape[1] + sqmesh.disparity.shape[1]/2
+  M[2*mp,-3] = 1
+  M[2*mp+1,-2] = 1
+  M[2*mp+3,-1] = 1
+
+  # M[0,-3] = 1
+  # M[1,-2] = 1
+  # M[3,-1] = 1
 
   mdist = d_x.mean()
-  ## Start as a square mesh, with first point centered and second over x axis
-  # u0 = mdist * reshape(.0+mgrid[0:disparity.shape[1],0:disparity.shape[0]].T,-1)
-  ## Start using initial xy coordinates.
-  #u0 = reshape(sqmesh.xyz[:,:2] - sqmesh.xyz[0,:2] ,-1)
-  #u0 += .01 *random(u0.shape)
 
   ## Fit this baby
   u_opt, success = scipy.optimize.leastsq(errfunc, u0, args=(M, d_x,))
@@ -195,34 +196,38 @@ Usage: %s <data_path>'''%(sys.argv[0]))
 
   ## Instantiate intrinsic parameters object.
   mypar = IntrinsicParameters(f, optical_center)
+
+  import time
+
+  sub=60
+
   ## Instantiate mesh object, and calculate grid parameters in 3D from the
   ## disparity array and intrinsic parameters.
   sqmesh = SquareMesh(disparity, mypar)
-
-  # subsampling factor
-  #sub = 200
-  #sub = 100
-  sub = 50
-  #sub = 25
   ## resample down the image 'sub' times
   sqmesh.subsample(sub)
-
+  ## Generate the 3D point cloud and connection array
   sqmesh.generate_xyz_mesh()
 
   #######################################################
   ## Run the optimization
-  u0 = reshape(sqmesh.xyz[:,:2] - sqmesh.xyz[0,:2] ,-1)
+
+  ## Find the "middle" point to make it the origin, and make it.
+  mp = (sqmesh.disparity.shape[0]/2) * sqmesh.disparity.shape[1] + sqmesh.disparity.shape[1]/2
+  ## Set the initial estimate from the original xy coordinates.
+  u0 = reshape(sqmesh.xyz[:,:2] - sqmesh.xyz[mp,:2] ,-1)
+  #u0 -= u0[0] ## ..or set the first point as origin.
 
   u_opt, success, final_err  = run_optimization(sqmesh,u0)
-
   print 'final err:', final_err
 
   q0 = reshape(u0, (-1, 2)) # , reshape(u_opt,(-1,2)), final_err
   q_opt = reshape(u_opt, (-1, 2)) # , reshape(u_opt,(-1,2)), final_err
 
   #############################################################################
-  ## Plot the disparity as an image
+  ## Plot stuff
   if do_plot:
+    ## Plot disparity data as an image
     x,y,z = sqmesh.xyz.T
     x = x.reshape(sqmesh.disparity.shape)
     y = y.reshape(sqmesh.disparity.shape)
@@ -235,10 +240,9 @@ Usage: %s <data_path>'''%(sys.argv[0]))
     cax = ax.imshow(disparity, interpolation='nearest')
     colorbar(cax, shrink=.5)
 
+    ## Plot wireframe
     ax = p3.Axes3D(fig, rect = [.55, .2, .4, .6], aspect='equal')
     title('Square mesh on 3D space', fontsize=16)
-
-    ## Plot the disparity as an image
 
     ax.axis('equal')
     ax.plot_wireframe(x,y,z)
@@ -250,14 +254,12 @@ Usage: %s <data_path>'''%(sys.argv[0]))
     ax.set_xlim3d(midx-mrang, midx+mrang)
     ax.set_ylim3d(midy-mrang, midy+mrang)
     ax.set_zlim3d(midz-mrang, midz+mrang)
-  ##
-  #############################################################################
 
     figure(2)
     for p in sqmesh.con:
-      q0 = reshape(u0,-1,2)
-      plot(sqmesh.xyz[p,0], sqmesh.xyz[p,1], 'g-')
-      plot(sqmesh.xyz[p,0], sqmesh.xyz[p,1], 'b-')
+      q0 = reshape(u0,(-1,2))
+      #plot(sqmesh.xyz[p,0], sqmesh.xyz[p,1], 'g-')
+      plot(q0[p,0], q0[p,1], 'b-')
     axis('equal')
     yla,ylb = ylim()
     ylim(ylb,yla)
