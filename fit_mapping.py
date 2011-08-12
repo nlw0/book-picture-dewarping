@@ -19,7 +19,7 @@ from  scipy.optimize import leastsq
 import sys
 import itertools
 
-from sim_stereo import distance_from_disparity
+#from sim_stereo import distance_from_disparity
 
 import mpl_toolkits.mplot3d.axes3d as p3
 
@@ -40,6 +40,18 @@ def devfunc(u, M):
   return 2*dot(u,M)
 
 errfunc = lambda u, M, d_x: fitfunc(u, M) - d_x
+
+
+def distance_from_disparity(d):
+  z = zeros(d.shape, dtype=float)
+  ## "identity" version
+  #return 1/(d/1e3)
+  # return 3e2-1./(d/5e1) ## for cone-00
+  # return 2-1./(d/5e3) ## for trig-00
+  # return 1000-1/(d/1e5)
+  ## Correct version, inverse of the function from http://mathnathan.com/2011/02/03/depthvsdistance/
+  return 348.0 / (1091.5 - d)
+  # return d
 
 
 class IntrinsicParameters:
@@ -177,29 +189,42 @@ if __name__ == '__main__':
 
 Usage: %s <data_path>'''%(sys.argv[0]))
 
+  paul_data = True
+
   ## Get the name of directory that contains the data. It should contain two
   ## files named 'params.txt' and 'disparity.txt'.
   data_path = '%s/'%(sys.argv[1])
 
-  ## Load the image with the disparity values. E.g., the range data produced by Kinect.
-  disparity = loadtxt(data_path+'disparity.txt')
-  ## Load the file with the camera parameters used to render the scene
-  ## The values are: [f, p[0], p[1], p[2], theta, phi, psi, k]
-  params_file = loadtxt(data_path+'params.txt')
-  ## The optical center is another important intrinsic parameter, but the
-  ## current simulator just pretend this is not an issue. So the optical center
-  ## is just the middle of the image, and there is also no radial lens
-  ## distortion.
-  optical_center = .5*(1+array([disparity.shape[1], disparity.shape[0]]))
-  ## Focal distance
-  f = params_file[0]
+  if paul_data:
+    ## Load the image with the disparity values. E.g., the range data produced by Kinect.
+    disparity = loadtxt(data_path+'kinect.mat')
+
+    ## Deal with outliers
+    disparity[disparity==2047] = disparity[disparity<2047].max()
+
+    optical_center = .5*(1+array([disparity.shape[1], disparity.shape[0]]))
+    f = 640
+  else:
+
+    ## Load the image with the disparity values. E.g., the range data produced by Kinect.
+    disparity = loadtxt(data_path+'disparity.txt')
+    ## Load the file with the camera parameters used to render the scene
+    ## The values are: [f, p[0], p[1], p[2], theta, phi, psi, k]
+    params_file = loadtxt(data_path+'params.txt')
+    ## The optical center is another important intrinsic parameter, but the
+    ## current simulator just pretend this is not an issue. So the optical center
+    ## is just the middle of the image, and there is also no radial lens
+    ## distortion.
+    optical_center = .5*(1+array([disparity.shape[1], disparity.shape[0]]))
+    ## Focal distance
+    f = params_file[0]
 
   ## Instantiate intrinsic parameters object.
   mypar = IntrinsicParameters(f, optical_center)
 
   import time
 
-  sub=60
+  sub = 20
 
   ## Instantiate mesh object, and calculate grid parameters in 3D from the
   ## disparity array and intrinsic parameters.
@@ -218,30 +243,37 @@ Usage: %s <data_path>'''%(sys.argv[0]))
   u0 = reshape(sqmesh.xyz[:,:2] - sqmesh.xyz[mp,:2] ,-1)
   #u0 -= u0[0] ## ..or set the first point as origin.
 
-  u_opt, success, final_err  = run_optimization(sqmesh,u0)
-  print 'final err:', final_err
+  #u_opt, success, final_err  = run_optimization(sqmesh,u0)
+  #print 'final err:', final_err
 
   q0 = reshape(u0, (-1, 2)) # , reshape(u_opt,(-1,2)), final_err
-  q_opt = reshape(u_opt, (-1, 2)) # , reshape(u_opt,(-1,2)), final_err
+  #q_opt = reshape(u_opt, (-1, 2)) # , reshape(u_opt,(-1,2)), final_err
+  q_opt = reshape(u0, (-1, 2)) # , reshape(u_opt,(-1,2)), final_err
 
   #############################################################################
   ## Plot stuff
   if do_plot:
     ## Plot disparity data as an image
     x,y,z = sqmesh.xyz.T
-    x = x.reshape(sqmesh.disparity.shape)
+    x = -x.reshape(sqmesh.disparity.shape)
     y = y.reshape(sqmesh.disparity.shape)
-    z = z.reshape(sqmesh.disparity.shape)
+    z = -z.reshape(sqmesh.disparity.shape)
 
     fig = plt.figure(figsize=plt.figaspect(.5))
     fig.suptitle('Calculation of 3D coordinates from range data (with quantization)', fontsize=20, fontweight='bold')
+    #fig.suptitle('Wireframe from reconstructed kinect data', fontsize=20, fontweight='bold')
     ax = fig.add_subplot(1,2,1)
     title('Kinect data (disparity)', fontsize=16)
-    cax = ax.imshow(disparity, interpolation='nearest')
+
+    dmax = disparity[disparity<2047].max()
+    dmin = disparity.min()
+
+    cax = ax.imshow(disparity, interpolation='nearest', vmin=dmin, vmax=dmax)
     colorbar(cax, shrink=.5)
 
     ## Plot wireframe
     ax = p3.Axes3D(fig, rect = [.55, .2, .4, .6], aspect='equal')
+    #ax = p3.Axes3D(fig, aspect='equal')
     title('Square mesh on 3D space', fontsize=16)
 
     ax.axis('equal')
@@ -254,6 +286,8 @@ Usage: %s <data_path>'''%(sys.argv[0]))
     ax.set_xlim3d(midx-mrang, midx+mrang)
     ax.set_ylim3d(midy-mrang, midy+mrang)
     ax.set_zlim3d(midz-mrang, midz+mrang)
+
+  #if False:
 
     figure(2)
     for p in sqmesh.con:
