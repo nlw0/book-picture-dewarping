@@ -58,9 +58,13 @@ class IntrinsicParameters:
   def __init__(self, f, center):
     self.f = f
     self.center = center
+
   def subsample(self, sub):
     self.f /= sub
     self.center /= sub
+
+  def crop(self, bbox):
+    self.center -= array([bbox[0], bbox[1]])
 
   ## The magical formula that gives distance form the disparity. This is the
   ## theoretical perfect model, a x**-1 expression.
@@ -89,7 +93,6 @@ class SquareMesh:
   def __init__(self, disparity, intparam):
     self.disparity = disparity
     self.intparam = intparam
-    Np = self.disparity.shape[0]*self.disparity.shape[1]
 
   def generate_xyz_mesh(self):
     ## Calculate the coordinate values.
@@ -129,6 +132,18 @@ class SquareMesh:
   def subsample(self, sub):
     self.disparity = self.disparity[::sub,::sub]
     self.intparam.subsample(sub)
+
+  def crop(self, bbox):
+    self.disparity = self.disparity[bbox[1]:bbox[3],bbox[0]:bbox[2]]
+    self.intparam.crop(bbox)
+
+  def smash(self):
+    ## Deal with outliers, just look for the maximum value outside of the maximum possible, then make the outliers the same.
+    self.disparity[self.disparity==2047] = self.disparity[self.disparity<2047].max()
+
+
+
+
 
 def run_optimization(sqmesh, u0):
   ## Start to set up optimization stuff
@@ -176,8 +191,11 @@ if __name__ == '__main__':
   ion() ## Turn on real-time plotting
 
   ## Plot stuff or not?
-  do_plot = True
-  # do_plot = False
+  # plot_wireframe = True
+  # plot_scatter = False
+  plot_wireframe = False
+  plot_scatter = True
+  plot_meshes = False
 
   register_cmap(name='guc', data=gucci_dict)
   rc('image', cmap='guc')
@@ -199,9 +217,6 @@ Usage: %s <data_path>'''%(sys.argv[0]))
     ## Load the image with the disparity values. E.g., the range data produced by Kinect.
     disparity = loadtxt(data_path+'kinect.mat')
 
-    ## Deal with outliers
-    disparity[disparity==2047] = disparity[disparity<2047].max()
-
     optical_center = .5*(1+array([disparity.shape[1], disparity.shape[0]]))
     f = 640
   else:
@@ -222,15 +237,21 @@ Usage: %s <data_path>'''%(sys.argv[0]))
   ## Instantiate intrinsic parameters object.
   mypar = IntrinsicParameters(f, optical_center)
 
-  import time
-
-  sub = 20
+  ## Parameters to pre-process the image. First crop out the interest region,
+  ## then downsample, then turn the outliers into more ammenable values.
+  #bbox = (0, 0, disparity.shape[1], disparity.shape[0])
+  bbox = (230, 125, 550, 375)
+  sub = 1
 
   ## Instantiate mesh object, and calculate grid parameters in 3D from the
   ## disparity array and intrinsic parameters.
   sqmesh = SquareMesh(disparity, mypar)
+  ## Cut the image (i.e. segment the book...)
+  sqmesh.crop(bbox)
   ## resample down the image 'sub' times
   sqmesh.subsample(sub)
+  sqmesh.smash()
+
   ## Generate the 3D point cloud and connection array
   sqmesh.generate_xyz_mesh()
 
@@ -252,29 +273,28 @@ Usage: %s <data_path>'''%(sys.argv[0]))
 
   #############################################################################
   ## Plot stuff
-  if do_plot:
+  if plot_wireframe:
     ## Plot disparity data as an image
     x,y,z = sqmesh.xyz.T
     x = -x.reshape(sqmesh.disparity.shape)
     y = y.reshape(sqmesh.disparity.shape)
     z = -z.reshape(sqmesh.disparity.shape)
 
-    fig = plt.figure(figsize=plt.figaspect(.5))
-    fig.suptitle('Calculation of 3D coordinates from range data (with quantization)', fontsize=20, fontweight='bold')
+    figure()
+    title('Kinect data', fontsize=20, fontweight='bold')
     #fig.suptitle('Wireframe from reconstructed kinect data', fontsize=20, fontweight='bold')
-    ax = fig.add_subplot(1,2,1)
     title('Kinect data (disparity)', fontsize=16)
 
     dmax = disparity[disparity<2047].max()
     dmin = disparity.min()
 
-    cax = ax.imshow(disparity, interpolation='nearest', vmin=dmin, vmax=dmax)
+    cax = imshow(disparity, interpolation='nearest', vmin=dmin, vmax=dmax)
     colorbar(cax, shrink=.5)
 
     ## Plot wireframe
-    ax = p3.Axes3D(fig, rect = [.55, .2, .4, .6], aspect='equal')
-    #ax = p3.Axes3D(fig, aspect='equal')
-    title('Square mesh on 3D space', fontsize=16)
+    fig = figure()
+    ax = p3.Axes3D(fig, aspect='equal')
+    title('Square mesh on 3D space', fontsize=20, fontweight='bold')
 
     ax.axis('equal')
     ax.plot_wireframe(x,y,z)
@@ -287,9 +307,32 @@ Usage: %s <data_path>'''%(sys.argv[0]))
     ax.set_ylim3d(midy-mrang, midy+mrang)
     ax.set_zlim3d(midz-mrang, midz+mrang)
 
-  #if False:
+  if plot_scatter:
+    ## Plot disparity data as an image
+    x,y,z = sqmesh.xyz[sqmesh.xyz[:,2]<sqmesh.xyz[:,2].max()].T
+    x=-x
+    z=-z
 
-    figure(2)
+    ## Plot wireframe
+    fig = figure(figsize=(10,8))
+    ax = p3.Axes3D(fig, aspect='equal')
+    title('Square mesh on 3D space', fontsize=20, fontweight='bold')
+
+    ax.axis('equal')
+    ax.scatter(x,y,z, c='b', marker='+')
+
+    mrang = max([x.max()-x.min(), y.max()-y.min(), z.max()-z.min()])/2
+    midx = (x.max()+x.min())/2
+    midy = (y.max()+y.min())/2
+    midz = (z.max()+z.min())/2
+    ax.set_xlim3d(midx-mrang, midx+mrang)
+    ax.set_ylim3d(midy-mrang, midy+mrang)
+    ax.set_zlim3d(midz-mrang, midz+mrang)
+
+
+
+  if plot_meshes:
+    figure()
     for p in sqmesh.con:
       q0 = reshape(u0,(-1,2))
       #plot(sqmesh.xyz[p,0], sqmesh.xyz[p,1], 'g-')
