@@ -54,6 +54,24 @@ def distance_from_disparity(d):
   # return d
 
 
+class ExtrinsicParameters:
+  def __init__(self, T, R):
+    self.T = T
+    self.R = R
+  def look_at(self,P):
+    Q = P-self.T
+    theta = arctan2(Q[0], Q[2])
+    phi = arctan2(-Q[1], sqrt(Q[0]**2+Q[2]**2))
+    psi = 0
+    R_psi = array([[cos(psi), sin(psi),0],[-sin(psi), cos(psi),0],[0,0,1]])
+    R_theta = array([[cos(theta), 0, -sin(theta)],[0,1,0],[sin(theta), 0, cos(theta)]])
+    R_phi = array([[1,0,0],[0, cos(phi), sin(phi)],[0, -sin(phi), cos(phi)]])
+    self.R = dot(dot(R_theta.T, R_phi.T), R_psi.T)
+    #self.R = dot(dot(R_theta, R_phi), R_psi).T
+
+
+
+
 class IntrinsicParameters:
   def __init__(self, f, center):
     self.f = f
@@ -141,47 +159,52 @@ class SquareMesh:
     ## Deal with outliers, just look for the maximum value outside of the maximum possible, then make the outliers the same.
     self.disparity[self.disparity==2047] = self.disparity[self.disparity<2047].max()
 
+  def run_optimization(self):
+    ## Find the "middle" point to make it the origin, and make it.
+    self.mp = (self.disparity.shape[0]/2) * self.disparity.shape[1] + self.disparity.shape[1]/2
+    ## Set the initial estimate from the original xy coordinates, subtracting by the location of the middle point
+    self.u0 = reshape(self.xyz[:,:2] - self.xyz[self.mp,:2] ,-1)
+
+    ## Start to set up optimization stuff
+    Np = self.xyz.shape[0] #disparity.shape[0] * disparity.shape[1]
+    Ned = self.con.shape[0]
+
+    print Np, Ned
+
+    M = zeros((2*Np, 2*Ned+3))
+    d_x = zeros(Ned+3)
+
+    for i in range(Ned):
+      a,b = self.con[i]
+
+      M[a*2,2*i] = 1
+      M[b*2,2*i] = -1
+      M[a*2+1,2*i+1] = 1
+      M[b*2+1,2*i+1] = -1
+      #d_x[i] = sqrt( ((self.xyz[a] - self.xyz[b]) ** 2 ).sum() )
+      d_x[i] = ( ((self.xyz[a] - self.xyz[b]) ** 2 ).sum() )
+
+    ## Find the "middle" point to make it the origin
+    mp = (self.disparity.shape[0]/2) * self.disparity.shape[1] + self.disparity.shape[1]/2
+    M[2*mp,-3] = 1
+    M[2*mp+1,-2] = 1
+    M[2*mp+3,-1] = 1
+
+    mdist = d_x.mean()
+
+    ## Fit this baby
+    self.uv, success = scipy.optimize.leastsq(errfunc, self.u0, args=(M, d_x,))
+
+    final_err = (errfunc(self.uv, M, d_x)**2).sum()
+
+    return success, final_err
+
+  def project_into_camera(self, int_param, ext_param):
+    xyz_c = dot(self.xyz - ext_param.T, ext_param.R)
+    self.rs = int_param.center + int_param.f * xyz_c[:,:2] / xyz_c[:,[2,2]]
 
 
 
-
-def run_optimization(sqmesh, u0):
-  ## Start to set up optimization stuff
-  Np = sqmesh.xyz.shape[0] #disparity.shape[0] * disparity.shape[1]
-  Ned = sqmesh.con.shape[0]
-
-  M = zeros((2*Np, 2*Ned+3))
-  d_x = zeros(Ned+3)
-
-  for i in range(Ned):
-    a,b = sqmesh.con[i]
-
-    M[a*2,2*i] = 1
-    M[b*2,2*i] = -1
-    M[a*2+1,2*i+1] = 1
-    M[b*2+1,2*i+1] = -1
-    #d_x[i] = sqrt( ((sqmesh.xyz[a] - sqmesh.xyz[b]) ** 2 ).sum() )
-    d_x[i] = ( ((sqmesh.xyz[a] - sqmesh.xyz[b]) ** 2 ).sum() )
-
-
-  ## Find the "middle" point to make it the origin
-  mp = (sqmesh.disparity.shape[0]/2) * sqmesh.disparity.shape[1] + sqmesh.disparity.shape[1]/2
-  M[2*mp,-3] = 1
-  M[2*mp+1,-2] = 1
-  M[2*mp+3,-1] = 1
-
-  # M[0,-3] = 1
-  # M[1,-2] = 1
-  # M[3,-1] = 1
-
-  mdist = d_x.mean()
-
-  ## Fit this baby
-  u_opt, success = scipy.optimize.leastsq(errfunc, u0, args=(M, d_x,))
-
-  final_err = (errfunc(u_opt, M, d_x)**2).sum()
-
-  return u_opt, success, final_err
 
 ###############################################################################
 ##
@@ -192,10 +215,13 @@ if __name__ == '__main__':
 
   ## Plot stuff or not?
   # plot_wireframe = True
-  # plot_scatter = False
   plot_wireframe = False
   plot_scatter = True
-  plot_meshes = False
+  # plot_scatter = False
+  plot_meshes = True
+  # plot_meshes = False
+  plot_cam = True
+  # plot_cam = False
 
   register_cmap(name='guc', data=gucci_dict)
   rc('image', cmap='guc')
@@ -220,7 +246,6 @@ Usage: %s <data_path>'''%(sys.argv[0]))
     optical_center = .5*(1+array([disparity.shape[1], disparity.shape[0]]))
     f = 640
   else:
-
     ## Load the image with the disparity values. E.g., the range data produced by Kinect.
     disparity = loadtxt(data_path+'disparity.txt')
     ## Load the file with the camera parameters used to render the scene
@@ -239,46 +264,52 @@ Usage: %s <data_path>'''%(sys.argv[0]))
 
   ## Parameters to pre-process the image. First crop out the interest region,
   ## then downsample, then turn the outliers into more ammenable values.
-  #bbox = (0, 0, disparity.shape[1], disparity.shape[0])
-  bbox = (230, 125, 550, 375)
-  sub = 1
+  #bbox = (0, 0, disparity.shape[1], disparity.shape[0]) # whole image
+  # bbox = (230, 125, 550, 375) #just the book, whole book
+  bbox = (230, 125, 400, 375)
+  sub = 20
 
+  #############################################################################
   ## Instantiate mesh object, and calculate grid parameters in 3D from the
   ## disparity array and intrinsic parameters.
   sqmesh = SquareMesh(disparity, mypar)
   ## Cut the image (i.e. segment the book...)
   sqmesh.crop(bbox)
-  ## resample down the image 'sub' times
+  ## Resample down the image 'sub' times, and handle outliers
   sqmesh.subsample(sub)
   sqmesh.smash()
-
   ## Generate the 3D point cloud and connection array
   sqmesh.generate_xyz_mesh()
 
-  #######################################################
+  #############################################################################
   ## Run the optimization
+  sqmesh.run_optimization()
 
-  ## Find the "middle" point to make it the origin, and make it.
-  mp = (sqmesh.disparity.shape[0]/2) * sqmesh.disparity.shape[1] + sqmesh.disparity.shape[1]/2
-  ## Set the initial estimate from the original xy coordinates.
-  u0 = reshape(sqmesh.xyz[:,:2] - sqmesh.xyz[mp,:2] ,-1)
-  #u0 -= u0[0] ## ..or set the first point as origin.
+  q0 = reshape(sqmesh.u0, (-1, 2)) # , reshape(u_opt,(-1,2)), final_err
+  q_opt = reshape(sqmesh.uv, (-1, 2)) # , reshape(u_opt,(-1,2)), final_err
 
-  #u_opt, success, final_err  = run_optimization(sqmesh,u0)
-  #print 'final err:', final_err
+  #############################################################################
+  ## Create camera projection of the 3D model
+  T = array([0.05,0,-0.05])
+  R = quaternion_to_matrix([0,0,0])
+  cam_ext = ExtrinsicParameters(T,R)
+  #cam_ext.look_at(array([-.02,-0.207,.58]))
+  cam_ext.look_at(array([-.02,.03,.57]))
 
-  q0 = reshape(u0, (-1, 2)) # , reshape(u_opt,(-1,2)), final_err
-  #q_opt = reshape(u_opt, (-1, 2)) # , reshape(u_opt,(-1,2)), final_err
-  q_opt = reshape(u0, (-1, 2)) # , reshape(u_opt,(-1,2)), final_err
+  cam_shot = rot90(imread(data_path+'img.png'),3)
+  c_f = 86/.009 # (Lens focal length divided by pixel size, in mm)
+  c_copt = array([cam_shot.shape[1]/2., cam_shot.shape[0]/2.])
+
+  cam_int = IntrinsicParameters(c_f, c_copt)
+
+  sqmesh.project_into_camera(cam_int, cam_ext)
+
 
   #############################################################################
   ## Plot stuff
   if plot_wireframe:
     ## Plot disparity data as an image
     x,y,z = sqmesh.xyz.T
-    x = -x.reshape(sqmesh.disparity.shape)
-    y = y.reshape(sqmesh.disparity.shape)
-    z = -z.reshape(sqmesh.disparity.shape)
 
     figure()
     title('Kinect data', fontsize=20, fontweight='bold')
@@ -310,8 +341,6 @@ Usage: %s <data_path>'''%(sys.argv[0]))
   if plot_scatter:
     ## Plot disparity data as an image
     x,y,z = sqmesh.xyz[sqmesh.xyz[:,2]<sqmesh.xyz[:,2].max()].T
-    x=-x
-    z=-z
 
     ## Plot wireframe
     fig = figure(figsize=(10,8))
@@ -329,22 +358,26 @@ Usage: %s <data_path>'''%(sys.argv[0]))
     ax.set_ylim3d(midy-mrang, midy+mrang)
     ax.set_zlim3d(midz-mrang, midz+mrang)
 
-
-
   if plot_meshes:
-    figure()
+    figure(figsize=(8,14))
+    subplot(2,1,1)
     for p in sqmesh.con:
-      q0 = reshape(u0,(-1,2))
       #plot(sqmesh.xyz[p,0], sqmesh.xyz[p,1], 'g-')
       plot(q0[p,0], q0[p,1], 'b-')
     axis('equal')
     yla,ylb = ylim()
     ylim(ylb,yla)
 
-    figure(3)
+    subplot(2,1,2)
     for p in sqmesh.con:
       plot(q_opt[p,0], q_opt[p,1], 'r-')
 
     axis('equal')
     yla,ylb = ylim()
     ylim(ylb,yla)
+
+  if plot_cam:
+    figure()
+    imshow(cam_shot)
+    for p in sqmesh.con:
+      plot(sqmesh.rs[p,0], sqmesh.rs[p,1], 'g-')
