@@ -16,10 +16,11 @@
 from pylab import *
 from fit_cone import *
 from  scipy.optimize import leastsq
+import scipy.interpolate
 import sys
 import itertools
 
-#from sim_stereo import distance_from_disparity
+import Image # For the quad transformation
 
 import mpl_toolkits.mplot3d.axes3d as p3
 
@@ -193,9 +194,11 @@ class SquareMesh:
     mdist = d_x.mean()
 
     ## Fit this baby
-    self.uv, success = scipy.optimize.leastsq(errfunc, self.u0, args=(M, d_x,))
+    uv_opt, success = scipy.optimize.leastsq(errfunc, self.u0, args=(M, d_x,))
 
-    final_err = (errfunc(self.uv, M, d_x)**2).sum()
+    final_err = (errfunc(uv_opt, M, d_x)**2).sum()
+
+    self.uv = reshape(uv_opt,(-1,2))
 
     return success, final_err
 
@@ -304,6 +307,27 @@ Usage: %s <data_path>'''%(sys.argv[0]))
 
   sqmesh.project_into_camera(cam_int, cam_ext)
 
+  #############################################################################
+  ## Calculate mapping value at grid points for mapping
+
+  cam_shot.shape
+  spacing = 50
+
+  grid_x, grid_y = mgrid[0:spacing:cam_shot.shape[1],0:spacing:cam_shot.shape[0]]
+
+  #grid_u = scipy.interpolate.interp2d(sqmesh.rs[:,0], sqmesh.rs[:,1], sqmesh.uv[:,0], kind='linear' )
+  #grid_v = scipy.interpolate.interp2d(sqmesh.rs[:,0], sqmesh.rs[:,1], sqmesh.uv[:,1], kind='linear' )
+
+  ## The list of mappings for the transformation
+
+  im = Image.open(data_path+'img.png')
+  cam_shot_pil = im.transpose(Image.ROTATE_270)
+
+
+
+
+
+
 
   #############################################################################
   ## Plot stuff
@@ -370,7 +394,7 @@ Usage: %s <data_path>'''%(sys.argv[0]))
 
     subplot(2,1,2)
     for p in sqmesh.con:
-      plot(q_opt[p,0], q_opt[p,1], 'r-')
+      plot(sqmesh.uv[p,0], sqmesh.uv[p,1], 'r-')
 
     axis('equal')
     yla,ylb = ylim()
