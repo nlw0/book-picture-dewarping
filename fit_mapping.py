@@ -313,10 +313,27 @@ Usage: %s <data_path>'''%(sys.argv[0]))
   cam_shot.shape
   spacing = 50
 
-  grid_x, grid_y = mgrid[0:spacing:cam_shot.shape[1],0:spacing:cam_shot.shape[0]]
+  grid_x, grid_y = mgrid[0:cam_shot.shape[1]:spacing,0:cam_shot.shape[0]:spacing]
+
+  grid_x = grid_x.ravel()
+  grid_y = grid_y.ravel()
 
   #grid_u = scipy.interpolate.interp2d(sqmesh.rs[:,0], sqmesh.rs[:,1], sqmesh.uv[:,0], kind='linear' )
   #grid_v = scipy.interpolate.interp2d(sqmesh.rs[:,0], sqmesh.rs[:,1], sqmesh.uv[:,1], kind='linear' )
+
+  grid_u = griddata(sqmesh.rs[:,0], sqmesh.rs[:,1], sqmesh.uv[:,0], grid_x, grid_y).ravel()
+  grid_v = griddata(sqmesh.rs[:,0], sqmesh.rs[:,1], sqmesh.uv[:,1], grid_x, grid_y).ravel()
+
+  for i in range(grid_x.shape[0]):
+    if grid_u.mask[i] or grid_v.mask[i]:
+      print 'eek!'
+      continue
+    xi, yi = grid_x.ravel()[i], grid_y.ravel()[i]
+    ui, vi = grid_u.ravel()[i], grid_v.ravel()[i]
+    print xi, yi, ui, vi
+
+
+
 
   ## The list of mappings for the transformation
 
