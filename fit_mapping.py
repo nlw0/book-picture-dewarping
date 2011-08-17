@@ -121,7 +121,6 @@ class SquareMesh:
     Nl,Nk = self.disparity.shape
     Ncon = 4 * (Nk - 1) * (Nl - 1) + Nk + Nl - 2
     self.con = zeros((Ncon,2), dtype=uint16)
-
     ## Loop through every pixel. Add connections when possible. Just either the
     ## same-line pixel to the right, or any of the three 8-neighbours below.
     i=0
@@ -147,6 +146,26 @@ class SquareMesh:
           self.con[i,0] = p
           self.con[i,1] = p+Nk+1
           i += 1
+
+    ## Connections for a square emsh (mostly for plotting)
+    Nsqcon = 2 * Nk * Nl - Nl -Nk
+    self.sqcon = zeros((Nsqcon,2), dtype=uint16)
+    ## Loop through every pixel. Add connections when possible. Just either the
+    ## same-line pixel to the right, or any of the three 8-neighbours below.
+    i=0
+    for p in range(Nl*Nk):
+      ## If it's not in the last column, connect to right.
+      if (p + 1) % Nk:
+        self.sqcon[i,0] = p
+        self.sqcon[i,1] = p+1
+        i += 1
+      ## If it not in the last line
+      if p <  Nk * (Nl - 1):
+        ## Connect to the point below
+        self.sqcon[i,0] = p
+        self.sqcon[i,1] = p+Nk
+        i += 1
+
 
   def subsample(self, sub):
     self.disparity = self.disparity[::sub,::sub]
@@ -311,36 +330,56 @@ Usage: %s <data_path>'''%(sys.argv[0]))
   ## Calculate mapping value at grid points for mapping
 
   cam_shot.shape
-  spacing = 50
+  spacing = 300 # rs mesh ~ 300 pixels for sub = 20
 
-  grid_x, grid_y = mgrid[0:cam_shot.shape[1]:spacing,0:cam_shot.shape[0]:spacing]
+  grid_r, grid_s = mgrid[0:cam_shot.shape[1]:spacing,0:cam_shot.shape[0]:spacing]
 
-  grid_x = grid_x.ravel()
-  grid_y = grid_y.ravel()
+  grid_u = griddata(sqmesh.rs[:,0], sqmesh.rs[:,1], sqmesh.uv[:,0], grid_r, grid_s)
+  grid_v = griddata(sqmesh.rs[:,0], sqmesh.rs[:,1], sqmesh.uv[:,1], grid_r, grid_s)
 
-  #grid_u = scipy.interpolate.interp2d(sqmesh.rs[:,0], sqmesh.rs[:,1], sqmesh.uv[:,0], kind='linear' )
-  #grid_v = scipy.interpolate.interp2d(sqmesh.rs[:,0], sqmesh.rs[:,1], sqmesh.uv[:,1], kind='linear' )
+  the_mappings = []
+  lims_uv = zeros(4)
 
-  grid_u = griddata(sqmesh.rs[:,0], sqmesh.rs[:,1], sqmesh.uv[:,0], grid_x, grid_y).ravel()
-  grid_v = griddata(sqmesh.rs[:,0], sqmesh.rs[:,1], sqmesh.uv[:,1], grid_x, grid_y).ravel()
+  for j in range(grid_r.shape[0]-1):
+    for k in range(grid_r.shape[1]-1):
+      if (grid_u.mask[j,k] or grid_v.mask[j,k] or
+          grid_u.mask[j,k+1] or grid_v.mask[j,k+1] or
+          grid_u.mask[j+1,k] or grid_v.mask[j+1,k] or
+          grid_u.mask[j+1,k+1] or grid_v.mask[j+1,k+1] ):
+        print j,k, 'eek!'
+        continue
+      r1, s1 = grid_r[j,k], grid_s[j,k]
+      r2, s2 = grid_r[j+1,k+1], grid_s[j+1,k+1]
+      u1, v1 = grid_u[j,k], grid_v[j,k]
+      u4, v4 = grid_u[j+1,k], grid_v[j+1,k]
+      u3, v3 = grid_u[j+1,k+1], grid_v[j+1,k+1]
+      u2, v2 = grid_u[j,k+1], grid_v[j,k+1]
+      the_mappings.append((r1,s1,r2,s2,u1,v1,u2,v2,u3,v3,u4,v4))
 
-  for i in range(grid_x.shape[0]):
-    if grid_u.mask[i] or grid_v.mask[i]:
-      print 'eek!'
-      continue
-    xi, yi = grid_x.ravel()[i], grid_y.ravel()[i]
-    ui, vi = grid_u.ravel()[i], grid_v.ravel()[i]
-    print xi, yi, ui, vi
+      lims_uv[0] = min(lims_uv[0], u1,u2,u3,u4)
+      lims_uv[1] = min(lims_uv[1], v1,v2,v3,v4)
+      lims_uv[2] = max(lims_uv[2], u1,u2,u3,u4)
+      lims_uv[3] = max(lims_uv[3], v1,v2,v3,v4)
 
+  the_mappings = array(the_mappings)
 
+  max_range_uv = max(lims_uv[2] - lims_uv[0], lims_uv[3] - lims_uv[1])
+  map_scale = 2000 / max_range_uv
+  output_size = (map_scale*(lims_uv[2] - lims_uv[0]), map_scale*(lims_uv[3] - lims_uv[1]))
 
-
-  ## The list of mappings for the transformation
+  the_mappings[:,4::2] -= lims_uv[0]
+  the_mappings[:,5::2] -= lims_uv[1]
+  the_mappings[:,4:] *= map_scale*10
 
   im = Image.open(data_path+'img.png')
   cam_shot_pil = im.transpose(Image.ROTATE_270)
 
+  map_list = [((a[0],a[1],a[2],a[3]), (a[4], a[5], a[6], a[7], a[8], a[9], a[10],a[11])) for a in the_mappings]
 
+
+  dewarped_image = cam_shot_pil.transform(output_size, Image.MESH, map_list)
+
+  dewarped_image.save('dewarped.png')
 
 
 
@@ -420,5 +459,5 @@ Usage: %s <data_path>'''%(sys.argv[0]))
   if plot_cam:
     figure()
     imshow(cam_shot)
-    for p in sqmesh.con:
+    for p in sqmesh.sqcon:
       plot(sqmesh.rs[p,0], sqmesh.rs[p,1], 'g-')
