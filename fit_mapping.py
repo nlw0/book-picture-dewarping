@@ -239,11 +239,11 @@ if __name__ == '__main__':
   # plot_wireframe = True
   plot_wireframe = False
   plot_scatter = True
-  # plot_scatter = False
+  #plot_scatter = False
   plot_meshes = True
-  # plot_meshes = False
+  #plot_meshes = False
   plot_cam = True
-  # plot_cam = False
+  #plot_cam = False
 
   register_cmap(name='guc', data=gucci_dict)
   rc('image', cmap='guc')
@@ -329,61 +329,58 @@ Usage: %s <data_path>'''%(sys.argv[0]))
   #############################################################################
   ## Calculate mapping value at grid points for mapping
 
-  cam_shot.shape
-  spacing = 300 # rs mesh ~ 300 pixels for sub = 20
+  output_length=2000
+  output_size=(2000,2000)
 
-  grid_r, grid_s = mgrid[0:cam_shot.shape[1]:spacing,0:cam_shot.shape[0]:spacing]
+  lims_uv = zeros(4)
+  lims_uv[0] = min(sqmesh.uv[:,0])
+  lims_uv[1] = min(sqmesh.uv[:,1])
+  lims_uv[2] = max(sqmesh.uv[:,0])
+  lims_uv[3] = max(sqmesh.uv[:,1])
 
-  grid_u = griddata(sqmesh.rs[:,0], sqmesh.rs[:,1], sqmesh.uv[:,0], grid_r, grid_s)
-  grid_v = griddata(sqmesh.rs[:,0], sqmesh.rs[:,1], sqmesh.uv[:,1], grid_r, grid_s)
+  max_uv_range = max(lims_uv[2]-lims_uv[0], lims_uv[3]-lims_uv[1])
+
+  maxNsps = int(1.2 * max(sqmesh.disparity.shape))
+
+  map_scale = output_length / max_uv_range
+
+  grid_u, grid_v = mgrid[lims_uv[0]:lims_uv[2]:maxNsps*1j,lims_uv[1]:lims_uv[3]:maxNsps*1j]
+
+  grid_r = griddata(sqmesh.uv[:,0], sqmesh.uv[:,1], sqmesh.rs[:,0], grid_u, grid_v)
+  grid_s = griddata(sqmesh.uv[:,0], sqmesh.uv[:,1], sqmesh.rs[:,1], grid_u, grid_v)
 
   the_mappings = []
-  lims_uv = zeros(4)
 
-  for j in range(grid_r.shape[0]-1):
-    for k in range(grid_r.shape[1]-1):
-      if (grid_u.mask[j,k] or grid_v.mask[j,k] or
-          grid_u.mask[j,k+1] or grid_v.mask[j,k+1] or
-          grid_u.mask[j+1,k] or grid_v.mask[j+1,k] or
-          grid_u.mask[j+1,k+1] or grid_v.mask[j+1,k+1] ):
-        print j,k, 'eek!'
+  for j in range(grid_u.shape[0]-1):
+    for k in range(grid_u.shape[1]-1):
+      if (grid_r.mask[j,k] or grid_s.mask[j,k] or
+          grid_r.mask[j,k+1] or grid_s.mask[j,k+1] or
+          grid_r.mask[j+1,k] or grid_s.mask[j+1,k] or
+          grid_r.mask[j+1,k+1] or grid_s.mask[j+1,k+1] ):
+        #print j,k, 'eek!'
         continue
-      r1, s1 = grid_r[j,k], grid_s[j,k]
-      r2, s2 = grid_r[j+1,k+1], grid_s[j+1,k+1]
       u1, v1 = grid_u[j,k], grid_v[j,k]
-      u4, v4 = grid_u[j+1,k], grid_v[j+1,k]
-      u3, v3 = grid_u[j+1,k+1], grid_v[j+1,k+1]
-      u2, v2 = grid_u[j,k+1], grid_v[j,k+1]
-      the_mappings.append((r1,s1,r2,s2,u1,v1,u2,v2,u3,v3,u4,v4))
-
-      lims_uv[0] = min(lims_uv[0], u1,u2,u3,u4)
-      lims_uv[1] = min(lims_uv[1], v1,v2,v3,v4)
-      lims_uv[2] = max(lims_uv[2], u1,u2,u3,u4)
-      lims_uv[3] = max(lims_uv[3], v1,v2,v3,v4)
+      u2, v2 = grid_u[j+1,k+1], grid_v[j+1,k+1]
+      r1, s1 = grid_r[j,k], grid_s[j,k]
+      r4, s4 = grid_r[j+1,k], grid_s[j+1,k]
+      r3, s3 = grid_r[j+1,k+1], grid_s[j+1,k+1]
+      r2, s2 = grid_r[j,k+1], grid_s[j,k+1]
+      the_mappings.append((u1,v1,u2,v2,r1,s1,r2,s2,r3,s3,r4,s4))
 
   the_mappings = array(the_mappings)
 
-  max_range_uv = max(lims_uv[2] - lims_uv[0], lims_uv[3] - lims_uv[1])
-  map_scale = 2000 / max_range_uv
-  output_size = (map_scale*(lims_uv[2] - lims_uv[0]), map_scale*(lims_uv[3] - lims_uv[1]))
-
-  the_mappings[:,4::2] -= lims_uv[0]
-  the_mappings[:,5::2] -= lims_uv[1]
-  the_mappings[:,4:] *= map_scale*10
+  the_mappings[:,[0,2]] -= lims_uv[0]
+  the_mappings[:,[1,3]] -= lims_uv[1]
+  the_mappings[:,:4] *= map_scale
 
   im = Image.open(data_path+'img.png')
   cam_shot_pil = im.transpose(Image.ROTATE_270)
 
   map_list = [((a[0],a[1],a[2],a[3]), (a[4], a[5], a[6], a[7], a[8], a[9], a[10],a[11])) for a in the_mappings]
 
-
   dewarped_image = cam_shot_pil.transform(output_size, Image.MESH, map_list)
 
   dewarped_image.save('dewarped.png')
-
-
-
-
 
   #############################################################################
   ## Plot stuff
