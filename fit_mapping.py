@@ -141,6 +141,34 @@ class PinholeCamera:
     xyz_c = dot(xyz - self.ext_param.T, self.ext_param.R)
     return self.int_param.center + self.int_param.f * xyz_c[:,:2] / xyz_c[:,[2,2]]
 
+  def find_pose(self, xyz):
+    def v_fun(x, *args):
+      ## Get the rotation matrix
+      self.T = x[:3]
+      self.R = quaternion_to_matrix( x[3:] )
+      ## Call the calculation method
+      projs = self.project_into_camera(args[0])
+      return self.calculate_MAP(rotM)
+
+    xini = zeros(6)
+
+    #################################################################
+    ## Execute the Simplex optimization to estimate orientation
+    ## from the initial estimate xini
+
+    ## Powell minimization
+    # ropt = fmin_powell(v_fun, xini, xtol=1e-9, ftol=1e-9,
+    #       maxiter=10000, full_output=True, disp=False)
+    ## Simplex optimization
+    ## Default xtol and ftol are 1e-4
+    ropt = fmin(v_fun, xini, args=(xyz,), xtol=1e-9, ftol=1e-9,
+          maxiter=10000, full_output=True, disp=False)
+
+    self.T = ropt[:3]
+    self.R = quaternion_to_matrix(ropt[3:])
+    #...fix_quaternion_parameters(ropt[3:])[1:]
+    ##
+    #################################################################
 
 
 ###############################################################################

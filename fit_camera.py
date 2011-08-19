@@ -21,6 +21,7 @@ from color_block import gucci_dict
 from fit_mapping import IntrinsicParameters, ExtrinsicParameters, PinholeCamera, quaternion_to_matrix
 
 
+
 ###############################################################################
 ##
 ##
