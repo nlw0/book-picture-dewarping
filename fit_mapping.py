@@ -93,21 +93,57 @@ class IntrinsicParameters:
   def coordinates_from_disparity(self, disparity):
     ## Calculate the world coordinates of each pixel.
 
+    assert disparity.shape > 1
+    Nl = disparity.shape[0]
+    Nk = disparity.shape[1]
+
     ## Initialize the output matrix with pixel coordinates over image plane, on
     ## camera reference frame.
-    output = zeros((disparity.shape[0]*disparity.shape[1], 3))
-    output[:,:2] = mgrid[:disparity.shape[1],:disparity.shape[0]].T.reshape(-1,2) - self.center
+    output = zeros((Nl*Nk, 3))
+    output[:,:2] = mgrid[:Nk,:Nl].T.reshape(-1,2) - self.center
     output[:,2] = self.f
 
     ## Calculate z from disparity
     z = self.distance_from_disparity(disparity.ravel())
-
-    #pdb.set_trace()
     output[:,0] *= z / self.f
     output[:,1] *= z / self.f
     output[:,2] = z
     return output
 
+  def coordinates_from_xy_disparity(self, xy, disparity):
+    ## Calculate the world coordinates of each pixel.
+
+    Np = disparity.shape[0]
+
+    ## Initialize the output matrix with pixel coordinates over image plane, on
+    ## camera reference frame.
+    output = zeros((Np, 3))
+    output[:,:2] = xy - self.center
+    output[:,2] = self.f
+
+    ## Calculate z from disparity
+    z = self.distance_from_disparity(disparity)
+    output[:,0] *= z / self.f
+    output[:,1] *= z / self.f
+    output[:,2] = z
+    return output
+
+###############################################################################
+## Pinhole camera model. Just a structure with internal and external
+## parameters. Has a method that calculates image projections.
+##
+class PinholeCamera:
+  def __init__(self, int_param, ext_param):
+    self.int_param = int_param
+    self.ext_param = ext_param
+
+
+###############################################################################
+## This class contains the model of the mapping, and that means a vector with
+## xyz coordinates of the model points in 3D, another vector with correcponding
+## uv coordinates (texture space) of these points, and a thisrd vector with rs
+## coordinates (camera space, i.e. the input image to be dewarped).
+##
 class SquareMesh:
   def __init__(self, disparity, intparam):
     self.disparity = disparity

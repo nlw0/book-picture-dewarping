@@ -78,3 +78,10 @@ Now select the corresponding points. _In the same order_.
 
   print k_pts
   print c_pts
+
+
+  pp = array(k_pts, dtype=int)
+  pp_dis = disparity[pp[:,1], pp[:,0]]
+  xyz = kin_int.coordinates_from_xy_disparity(pp, pp_dis)
+
+  print xyz
