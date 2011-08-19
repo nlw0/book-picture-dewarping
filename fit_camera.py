@@ -18,7 +18,7 @@ matplotlib.use('WXAgg') ## Seems to be the only backend to work without complain
 from pylab import *
 from color_block import gucci_dict
 
-from fit_mapping import IntrinsicParameters
+from fit_mapping import IntrinsicParameters, ExtrinsicParameters, PinholeCamera, quaternion_to_matrix
 
 
 ###############################################################################
@@ -79,9 +79,16 @@ Now select the corresponding points. _In the same order_.
   print k_pts
   print c_pts
 
-
   pp = array(k_pts, dtype=int)
   pp_dis = disparity[pp[:,1], pp[:,0]]
   xyz = kin_int.coordinates_from_xy_disparity(pp, pp_dis)
 
   print xyz
+
+  T = array([0,0,0])
+  R = quaternion_to_matrix(array([0,0,0]))
+  cam_ext = ExtrinsicParameters(T, R)
+
+  c_camera = PinholeCamera(cam_int, cam_ext)
+
+  print c_camera.project_into_camera(xyz)

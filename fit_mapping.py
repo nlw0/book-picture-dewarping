@@ -137,6 +137,11 @@ class PinholeCamera:
     self.int_param = int_param
     self.ext_param = ext_param
 
+  def project_into_camera(self, xyz):
+    xyz_c = dot(xyz - self.ext_param.T, self.ext_param.R)
+    return self.int_param.center + self.int_param.f * xyz_c[:,:2] / xyz_c[:,[2,2]]
+
+
 
 ###############################################################################
 ## This class contains the model of the mapping, and that means a vector with
