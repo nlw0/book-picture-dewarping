@@ -34,6 +34,9 @@ if __name__ == '__main__':
   rc('image', cmap='guc')
   # rc('image', cmap='RdBu')
 
+  #get_points = True
+  get_points = False
+
   ## Check number of parameters
   if len(sys.argv)<2:
     raise Exception('''Incorrect number of parameters.
@@ -62,20 +65,35 @@ Usage: %s <data_path>'''%(sys.argv[0]))
   c_oc = array([cam_shot.shape[1]/2., cam_shot.shape[0]/2.])
   cam_int = IntrinsicParameters(c_f, c_oc)
 
-  print """
-Please select four points in the frist image. Click on a 5th point (that will be discarded) to finish. Remember the order you selected
-them. If you click on the right spot, the result will be bad, and it will not be
-a fault of the algorithm. It can only be attributable to human error.
-"""
 
-  imshow(disparity, vmin=420, vmax=550)
-  k_pts = array(ginput(n=5, show_clicks=True)[:-1])
 
-  print """
-Now select the corresponding points. _In the same order_.
-"""
-  imshow(cam_shot)
-  c_pts = array(ginput(n=5, show_clicks=True)[:-1])
+  if get_points:
+
+    print """
+  Please select four points in the frist image. Click on a 5th point (that will be
+  discarded) to finish. Remember the order you selected them. If you click on the
+  right spot, the result will be bad, and it will not be a fault of the
+  algorithm. It can only be attributable to human error.
+  """
+
+    imshow(disparity, vmin=420, vmax=550)
+    k_pts = array(ginput(n=5, show_clicks=True)[:-1])
+
+    print """
+  Now select the corresponding points. _In the same order_.
+  """
+    imshow(cam_shot)
+    c_pts = array(ginput(n=5, show_clicks=True)[:-1])
+  else:
+
+    k_pts = array([[ 194.33870968,   93.69354839],
+                   [ 190.46774194,  374.98387097],
+                   [ 360.79032258,  373.69354839],
+                   [ 372.40322581,  119.5       ]])
+    c_pts=array([[  390.5 ,  125.5],
+                 [  390.5 , 3181. ],
+                 [ 2543.  , 3170.5],
+                 [ 2574.5 ,  125.5]])
 
   print k_pts
   print c_pts
@@ -93,3 +111,9 @@ Now select the corresponding points. _In the same order_.
   c_camera = PinholeCamera(cam_int, cam_ext)
 
   print c_camera.project_into_camera(xyz)
+
+  c_camera.find_pose(xyz, c_pts)
+
+  print c_camera.ext_param.T
+  print c_camera.ext_param.R
+

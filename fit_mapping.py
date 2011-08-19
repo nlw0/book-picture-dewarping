@@ -15,7 +15,7 @@
 
 from pylab import *
 from fit_cone import *
-from  scipy.optimize import leastsq
+from  scipy.optimize import leastsq, fmin, fmin_powell
 import scipy.interpolate
 import sys
 import itertools
@@ -69,9 +69,6 @@ class ExtrinsicParameters:
     R_phi = array([[1,0,0],[0, cos(phi), sin(phi)],[0, -sin(phi), cos(phi)]])
     self.R = dot(dot(R_theta.T, R_phi.T), R_psi.T)
     #self.R = dot(dot(R_theta, R_phi), R_psi).T
-
-
-
 
 class IntrinsicParameters:
   def __init__(self, f, center):
@@ -141,31 +138,39 @@ class PinholeCamera:
     xyz_c = dot(xyz - self.ext_param.T, self.ext_param.R)
     return self.int_param.center + self.int_param.f * xyz_c[:,:2] / xyz_c[:,[2,2]]
 
-  def find_pose(self, xyz):
+  def find_pose(self, xyz, projs):
     def v_fun(x, *args):
+      print 40*'-'
+      print x
       ## Get the rotation matrix
-      self.T = x[:3]
-      self.R = quaternion_to_matrix( x[3:] )
+      self.ext_param.T = x[:3]
+      self.ext_param.R = quaternion_to_matrix( x[3:] )
       ## Call the calculation method
-      projs = self.project_into_camera(args[0])
-      return self.calculate_MAP(rotM)
+      reprojs = self.project_into_camera(args[0])
+      print args[1]
+      print reprojs
+      err = sum(abs(projs-reprojs).ravel())
+      print err
+      return err
 
-    xini = zeros(6)
+    xini = [0,0,0,0,0,0]
 
     #################################################################
     ## Execute the Simplex optimization to estimate orientation
     ## from the initial estimate xini
 
     ## Powell minimization
-    # ropt = fmin_powell(v_fun, xini, xtol=1e-9, ftol=1e-9,
-    #       maxiter=10000, full_output=True, disp=False)
+    #ropt = fmin_powell(v_fun, xini, args=(xyz, projs,), xtol=1e-9, ftol=1e-9,
+    #      maxiter=10000, full_output=True, disp=False)
     ## Simplex optimization
     ## Default xtol and ftol are 1e-4
-    ropt = fmin(v_fun, xini, args=(xyz,), xtol=1e-9, ftol=1e-9,
+    ropt = fmin(v_fun, xini, args=(xyz, projs,), xtol=1e-9, ftol=1e-9,
           maxiter=10000, full_output=True, disp=False)
 
-    self.T = ropt[:3]
-    self.R = quaternion_to_matrix(ropt[3:])
+    print ropt
+    popt = ropt[0]
+    self.ext_param.T = popt[:3]
+    self.ext_param.R = quaternion_to_matrix(popt[3:])
     #...fix_quaternion_parameters(ropt[3:])[1:]
     ##
     #################################################################
