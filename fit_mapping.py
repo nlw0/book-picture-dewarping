@@ -140,17 +140,15 @@ class PinholeCamera:
 
   def find_pose(self, xyz, projs):
     def v_fun(x, *args):
-      print 40*'-'
-      print x
       ## Get the rotation matrix
       self.ext_param.T = x[:3]
       self.ext_param.R = quaternion_to_matrix( x[3:] )
       ## Call the calculation method
       reprojs = self.project_into_camera(args[0])
-      print args[1]
-      print reprojs
-      err = sum(abs(projs-reprojs).ravel())
-      print err
+      ## Sum of absolute errors
+      # err = sum(abs(projs-reprojs).ravel())
+      ## Maximum absolute error
+      err = max(abs(projs-reprojs).ravel())
       return err
 
     xini = [0,0,0,0,0,0]
@@ -160,17 +158,18 @@ class PinholeCamera:
     ## from the initial estimate xini
 
     ## Powell minimization
-    #ropt = fmin_powell(v_fun, xini, args=(xyz, projs,), xtol=1e-9, ftol=1e-9,
-    #      maxiter=10000, full_output=True, disp=False)
+    ropt = fmin_powell(v_fun, xini, args=(xyz, projs,), xtol=1e-9, ftol=1e-9,
+          maxiter=10000, full_output=True, disp=False)
     ## Simplex optimization
     ## Default xtol and ftol are 1e-4
-    ropt = fmin(v_fun, xini, args=(xyz, projs,), xtol=1e-9, ftol=1e-9,
-          maxiter=10000, full_output=True, disp=False)
+    #ropt = fmin(v_fun, xini, args=(xyz, projs,), xtol=1e-9, ftol=1e-9,
+    #      maxiter=10000, full_output=True, disp=False)
 
     print ropt
     popt = ropt[0]
     self.ext_param.T = popt[:3]
     self.ext_param.R = quaternion_to_matrix(popt[3:])
+    self.ext_param.Q = popt[3:]
     #...fix_quaternion_parameters(ropt[3:])[1:]
     ##
     #################################################################
@@ -240,7 +239,6 @@ class SquareMesh:
         self.sqcon[i,1] = p+Nk
         i += 1
 
-
   def subsample(self, sub):
     self.disparity = self.disparity[::sub,::sub]
     self.intparam.subsample(sub)
@@ -298,9 +296,6 @@ class SquareMesh:
   def project_into_camera(self, int_param, ext_param):
     xyz_c = dot(self.xyz - ext_param.T, ext_param.R)
     self.rs = int_param.center + int_param.f * xyz_c[:,:2] / xyz_c[:,[2,2]]
-
-
-
 
 ###############################################################################
 ##
@@ -362,7 +357,9 @@ Usage: %s <data_path>'''%(sys.argv[0]))
   ## then downsample, then turn the outliers into more ammenable values.
   #bbox = (0, 0, disparity.shape[1], disparity.shape[0]) # whole image
   # bbox = (230, 125, 550, 375) #just the book, whole book
-  bbox = (230, 125, 400, 375)
+  #bbox = (230, 125, 400, 375)
+  ##paul_data/110307-100158
+  bbox = (169, 142, 300, 350)
   sub = 20
 
   #############################################################################
@@ -386,9 +383,15 @@ Usage: %s <data_path>'''%(sys.argv[0]))
 
   #############################################################################
   ## Create camera projection of the 3D model
-  T = array([0.05,0,-0.05])
-  R = quaternion_to_matrix([0,0,0])
-  cam_ext = ExtrinsicParameters(T,R)
+  #T = array([0.05,0,-0.05])
+  #R = quaternion_to_matrix([0,0,0])
+  ## paul_data/110307-100158
+  # T = array([3.843781456148149395e-02, 3.129406939503146662e-02, -1.630428273915007775e-01])
+  # Q = array([1.076490576378562151e-02, 8.555519788242749168e-02, -1.376981646024684827e-02])
+  T = array([0,0,0])
+  Q = array([0,0,0])
+  #cam_ext = ExtrinsicParameters(T,R)
+  cam_ext = ExtrinsicParameters(T,quaternion_to_matrix(Q))
   #cam_ext.look_at(array([-.02,-0.207,.58]))
   cam_ext.look_at(array([-.02,.03,.57]))
 

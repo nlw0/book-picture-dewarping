@@ -14,13 +14,11 @@
 # limitations under the License.
 
 import matplotlib
-matplotlib.use('WXAgg') ## Seems to be the only backend to work without complaints.
+#matplotlib.use('WXAgg') ## Seems to be the only backend to work without complaints.
 from pylab import *
 from color_block import gucci_dict
 
 from fit_mapping import IntrinsicParameters, ExtrinsicParameters, PinholeCamera, quaternion_to_matrix
-
-
 
 ###############################################################################
 ##
@@ -34,8 +32,8 @@ if __name__ == '__main__':
   rc('image', cmap='guc')
   # rc('image', cmap='RdBu')
 
-  #get_points = True
-  get_points = False
+  get_points = True
+  #get_points = False
 
   ## Check number of parameters
   if len(sys.argv)<2:
@@ -52,6 +50,7 @@ Usage: %s <data_path>'''%(sys.argv[0]))
   if paul_data:
     ## Load the image with the disparity values. E.g., the range data produced by Kinect.
     disparity = loadtxt(data_path+'kinect.mat')
+    #disparity = rot90(loadtxt(data_path+'kinect.mat'),2)
 
     k_f = 640
     k_oc = .5*(1+array([disparity.shape[1], disparity.shape[0]]))
@@ -68,6 +67,7 @@ Usage: %s <data_path>'''%(sys.argv[0]))
 
 
   if get_points:
+    figure(1)
 
     print """
   Please select four points in the frist image. Click on a 5th point (that will be
@@ -76,7 +76,7 @@ Usage: %s <data_path>'''%(sys.argv[0]))
   algorithm. It can only be attributable to human error.
   """
 
-    imshow(disparity, vmin=420, vmax=550)
+    imshow(disparity, vmin=420, vmax=560)
     k_pts = array(ginput(n=5, show_clicks=True)[:-1])
 
     print """
@@ -114,6 +114,21 @@ Usage: %s <data_path>'''%(sys.argv[0]))
 
   c_camera.find_pose(xyz, c_pts)
 
-  print c_camera.ext_param.T
-  print c_camera.ext_param.R
+  reproj = c_camera.project_into_camera(xyz)
 
+  print c_camera.ext_param.T
+  print c_camera.ext_param.Q
+
+  savetxt(data_path+'params.txt', [c_camera.ext_param.T, c_camera.ext_param.Q ])
+
+  figure(2)
+  subplot(1,2,1)
+  imshow(disparity, vmin=420, vmax=560)
+  plot(k_pts[:,0], k_pts[:,1], 'b+', ms=10, mew=2)
+
+  subplot(1,2,2)
+  imshow(cam_shot)
+  plot(c_pts[:,0], c_pts[:,1], 'b+', ms=10, mew=2)
+  plot(reproj[:,0], reproj[:,1], 'rx', ms=10, mew=2)
+
+  suptitle('Camera localization from user selected points', fontweight='bold', fontsize=20)
