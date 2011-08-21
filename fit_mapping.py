@@ -17,6 +17,7 @@ from pylab import *
 from fit_cone import *
 from  scipy.optimize import leastsq, fmin, fmin_powell
 import scipy.interpolate
+import scipy.ndimage
 import sys
 import itertools
 
@@ -373,6 +374,21 @@ Usage: %s <data_path>'''%(sys.argv[0]))
   sqmesh.smash()
   ## Generate the 3D point cloud and connection array
   sqmesh.generate_xyz_mesh()
+
+  #############################################################################
+  ## Calculate surface normals... First try, linear filter.
+  ## Directional derivative filter
+  shigeru_filter=scipy.array([
+      [ -0.003776, -0.010199, 0., 0.010199, 0.003776 ],
+      [ -0.026786, -0.070844, 0., 0.070844, 0.026786 ],
+      [ -0.046548, -0.122572, 0., 0.122572, 0.046548 ],
+      [ -0.026786, -0.070844, 0., 0.070844, 0.026786 ],
+      [ -0.003776, -0.010199, 0., 0.010199, 0.003776 ]
+      ])
+  devj = zeros(disparity.shape)
+  devk = zeros(disparity.shape)
+  scipy.ndimage.convolve(disparity, shigeru_filter, devk )
+  scipy.ndimage.convolve(disparity, shigeru_filter.T, devj)
 
   #############################################################################
   ## Run the optimization
