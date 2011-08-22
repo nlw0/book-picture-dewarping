@@ -356,12 +356,12 @@ Usage: %s <data_path>'''%(sys.argv[0]))
 
   ## Parameters to pre-process the image. First crop out the interest region,
   ## then downsample, then turn the outliers into more ammenable values.
-  #bbox = (0, 0, disparity.shape[1], disparity.shape[0]) # whole image
+  bbox = (0, 0, disparity.shape[1], disparity.shape[0]) # whole image
   # bbox = (230, 125, 550, 375) #just the book, whole book
   #bbox = (230, 125, 400, 375)
   ##paul_data/110307-100158
-  bbox = (169, 142, 300, 350)
-  sub = 20
+  #box = (169, 142, 300, 350)
+  sub = 1
 
   #############################################################################
   ## Instantiate mesh object, and calculate grid parameters in 3D from the
@@ -378,21 +378,32 @@ Usage: %s <data_path>'''%(sys.argv[0]))
   #############################################################################
   ## Calculate surface normals... First try, linear filter.
   ## Directional derivative filter
-  shigeru_filter=scipy.array([
-      [ -0.003776, -0.010199, 0., 0.010199, 0.003776 ],
-      [ -0.026786, -0.070844, 0., 0.070844, 0.026786 ],
-      [ -0.046548, -0.122572, 0., 0.122572, 0.046548 ],
-      [ -0.026786, -0.070844, 0., 0.070844, 0.026786 ],
-      [ -0.003776, -0.010199, 0., 0.010199, 0.003776 ]
-      ])
-  devj = zeros(disparity.shape)
-  devk = zeros(disparity.shape)
-  scipy.ndimage.convolve(disparity, shigeru_filter, devk )
-  scipy.ndimage.convolve(disparity, shigeru_filter.T, devj)
+  q = sqmesh.xyz.reshape(sqmesh.disparity.shape[0], sqmesh.disparity.shape[1],3)
+  w = 3
+  ww = zeros((sqmesh.disparity.shape[0], sqmesh.disparity.shape[1], 3))
+  for j in range(w,sqmesh.disparity.shape[0]-w):
+    for k in range(w,sqmesh.disparity.shape[1]-w):
+      qq = []
+      for jj in range(-w,w+1):
+        for kk in range(-w,w+1):
+          qq.append(q[j+jj,k+kk,:])
+      ww[j,k,:] = estimate_normal(array(qq))
+
+  ww[ww[:,:,2]<0]*=-1
+  
+  figure(4)
+  subplot(2,2,1)
+  imshow(sqmesh.disparity, vmin=440, vmax=550, interpolation='nearest')
+  subplot(2,2,2)
+  imshow(ww[:,:,0], vmin=-.95, vmax=.95, interpolation='nearest')
+  subplot(2,2,3)
+  imshow(ww[:,:,1], vmin=-.95, vmax=.95, interpolation='nearest')
+  subplot(2,2,4)
+  imshow(ww[:,:,2], vmin=-.95, vmax=.95, interpolation='nearest')
 
   #############################################################################
   ## Run the optimization
-  sqmesh.run_optimization()
+  #sqmesh.run_optimization()
 
   q0 = reshape(sqmesh.u0, (-1, 2)) # , reshape(u_opt,(-1,2)), final_err
   q_opt = reshape(sqmesh.uv, (-1, 2)) # , reshape(u_opt,(-1,2)), final_err
