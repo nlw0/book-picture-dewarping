@@ -48,16 +48,16 @@ def sys_eqs(pl, q):
   assert (pl.shape[0] % 6) == 0
 
   ## Number of points
-  N = pl.shape/6
+  N = pl.shape[0]/6
 
   ## Split pl into the p matrix with 3D coordinates of each point, and the l
   ## matrix with the 3 multipliers for the conditions over each point.
 
   ## First 3N values are the coordinates for the N points
-  p = reshape(pl[:3*N], N, -1)
+  p = reshape(pl[:3*N], (N, -1))
   ## Last 3N values are the Lagrange multipliers ("lambdas"). Each point has 3
   ## corresponding restrictions, and each of these has one multiplier.
-  l = reshape(pl[3*N:], N, -1)
+  l = reshape(pl[3*N:], (N, -1))
 
   ## Calculate the p derivatives (sum U_j^k p_k^w) into temporary arrays.
   p_u = dot(U, p)
@@ -121,7 +121,7 @@ def execute_test(k,tt):
 
   Np = x.shape[0]
   q = 4
-  con=[]
+  con = []
   for a in range(Np):
     if a%q != (q-1):
       con.append((a, a+1))
@@ -179,6 +179,16 @@ if __name__ == '__main__':
   Nl = 5
 
   calculate_U_and_V(Nl, Nk)
+
+  k = 2
+  tt = pi/5
+  q = generate_cyl_points(k,tt)
+
+  Np = Nl*Nk
+  pl0 = zeros(6*Np)
+
+  #print sys_eqs(pl, q)
+  pl_opt, success = scipy.optimize.leastsq(sys_eqs, pl0, args=(q,))
 
 
 
