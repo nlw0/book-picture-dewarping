@@ -110,8 +110,8 @@ def calculate_U_and_V(Nl,Nk):
       elif l == Nl-1:
         dind -= Nk
 
-      U[ind, dind + eight_neighborhood] = array([-1,0,1,-2,0,2,-1,0,1])
-      V[ind, dind + eight_neighborhood] = array([-1,-2,-1,0,0,0,1,2,1])
+      U[ind, dind + eight_neighborhood] = array([-1,0,1,-2,0,2,-1,0,1])/8.
+      V[ind, dind + eight_neighborhood] = array([-1,-2,-1,0,0,0,1,2,1])/8.
 
 
 
@@ -190,7 +190,19 @@ if __name__ == '__main__':
   #print sys_eqs(pl, q)
   pl_opt, success = scipy.optimize.leastsq(sys_eqs, pl0, args=(q,))
 
-
+  p = pl_opt.reshape(-1,3)[:Np]
+  subplot(2,3,1)
+  imshow(reshape(q[:,0],(5,-1)), interpolation='nearest')
+  subplot(2,3,2)
+  imshow(reshape(q[:,1],(5,-1)), interpolation='nearest')
+  subplot(2,3,3)
+  imshow(reshape(q[:,2],(5,-1)), interpolation='nearest')
+  subplot(2,3,4)
+  imshow(reshape(p[:,0],(5,-1)), interpolation='nearest')
+  subplot(2,3,5)
+  imshow(reshape(p[:,1],(5,-1)), interpolation='nearest')
+  subplot(2,3,6)
+  imshow(reshape(p[:,2],(5,-1)), interpolation='nearest')
 
   if False:
 
