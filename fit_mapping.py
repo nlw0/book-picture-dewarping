@@ -390,7 +390,7 @@ Usage: %s <data_path>'''%(sys.argv[0]))
       ww[j,k,:] = estimate_normal(array(qq))
 
   ww[ww[:,:,2]<0]*=-1
-  
+
   figure(4)
   subplot(2,2,1)
   imshow(sqmesh.disparity, vmin=440, vmax=550, interpolation='nearest')
