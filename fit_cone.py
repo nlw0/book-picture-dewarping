@@ -146,8 +146,8 @@ def generate_cone_points(L, T):
   p = dot(p,R2)+trans2
   return p
 
-def generate_cyl_points(k,tt):
-  uv = reshape(.0+mgrid[0:5,0:1,-1:4].T,(-1,3))
+def generate_cyl_points(k,tt,N):
+  uv = reshape(.0+mgrid[0:N,0:1,-1:N-1].T,(-1,3))
   Q1 = array([0.,sin(tt/2),0.])
   R1 = quaternion_to_matrix(Q1)
   uvr = dot(uv,R1)/k

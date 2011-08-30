@@ -21,6 +21,7 @@ from pylab import *
 import pdb
 
 from fit_cone import *
+import mpl_toolkits.mplot3d.axes3d as p3
 
 from  scipy.optimize import leastsq
 ion()
@@ -70,15 +71,65 @@ def sys_eqs(pl, q):
   ## gradient of the original objective function as a linear combination of the
   ## gradients of the "g" functions (constraints). The obscure l[:,3*[0]] is a
   ## matrix with the first column of l replicated 3 times.
-  h = p - q + (l[:,3*[0]] * dot(U.T, p_u) +
-               l[:,3*[1]] * dot(V.T, p_v) +
-               l[:,3*[2]] * (dot(U.T, p_v) + dot(V.T, p_u)) / 2)
+  h = p - q + (dot(U.T, l[:,3*[0]] * p_u) +
+               dot(V.T, l[:,3*[1]] * p_v) +
+               (dot(U.T, l[:,3*[2]] * p_v) + dot(V.T, l[:,3*[2]] * p_u)) / 2)
 
   g = c_[(p_u**2).sum(1) - 1,
          (p_v**2).sum(1) - 1,
          (p_u*p_v).sum(1)]
 
   return r_[ravel(h), ravel(g)]
+
+def sys_jacobian(pl, q):
+  global U
+  global V
+
+  assert (pl.shape[0] % 6) == 0
+
+  ## Number of points
+  N = pl.shape[0]/6
+
+  output = zeros((N,N))
+
+  ## Split pl into the p matrix with 3D coordinates of each point, and the l
+  ## matrix with the 3 multipliers for the conditions over each point.
+
+  ## First 3N values are the coordinates for the N points
+  p = reshape(pl[:3*N], (N, -1))
+  ## Last 3N values are the Lagrange multipliers ("lambdas"). Each point has 3
+  ## corresponding restrictions, and each of these has one multiplier.
+  l = reshape(pl[3*N:], (N, -1))
+
+  ## Calculate the p derivatives (sum U_j^k p_k^w) into temporary arrays.
+  p_u = dot(U, p)
+  p_v = dot(V, p)
+
+  ## Calculate "residue" function for each coordinate (p - q plus all the
+  ## magical lambdas), and calculate the values of the restriction functions.
+
+  ## The actual calculation of the "h" function, the decomposition of the
+  ## gradient of the original objective function as a linear combination of the
+  ## gradients of the "g" functions (constraints). The obscure l[:,3*[0]] is a
+  ## matrix with the first column of l replicated 3 times.
+  dhdp = identity(3*Np) + (dot(U.T * U, l[:,3*[0]]) +
+                           dot(V.T * V, l[:,3*[1]]) +
+                           dot(U.T*V + V.T*U, l[:,3*[2]]) / 2)
+  dhdlu = U.T * c_[N*[p_u]].T
+  dhdlv = V.T * c_[N*[p_v]].T
+  dhdluv = (U.T * c_[N*[p_v]].T + V.T * c_[3*N*[p_u]].T) / 2
+  ## Interleave the lu lv and luvs
+  dhdl = reshape(c_[ravel(dhdlu.T), ravel(dhdlv.T), ravel(dhdluv.T)], 3*N, 3*N)
+
+  dgudp = 2 * U * c_[N*[p_u]]
+  dgvdp = 2 * V * c_[N*[p_v]]
+  dguvdp = U * c_[3*N*[p_v]] + V * c_[N*[p_u]]
+
+
+  dgdl = zeros((3*N, 3*N))
+
+  return r_[ravel(h), ravel(g)]
+
 
 def calculate_U_and_V(Nl,Nk):
   global U
@@ -175,34 +226,65 @@ def execute_test(k,tt):
 
 if __name__ == '__main__':
 
-  Nk = 5
-  Nl = 5
+  Nk = 7
+  Nl = 7
 
   calculate_U_and_V(Nl, Nk)
 
   k = 2
-  tt = pi/5
-  q = generate_cyl_points(k,tt)
+  tt = 0.5*pi/3
+  q = generate_cyl_points(k,tt,Nk)
+
+  q[:,1] *=1.5
+
 
   Np = Nl*Nk
   pl0 = zeros(6*Np)
+  pl0[:3*Np] = 0
+  #pl0[:3*Np] = q.ravel()
+  #pl0[1:3*Np:3] = .6
 
-  #print sys_eqs(pl, q)
+  #print sys_eqs(pl0, q)
   pl_opt, success = scipy.optimize.leastsq(sys_eqs, pl0, args=(q,))
 
   p = pl_opt.reshape(-1,3)[:Np]
-  subplot(2,3,1)
-  imshow(reshape(q[:,0],(5,-1)), interpolation='nearest')
-  subplot(2,3,2)
-  imshow(reshape(q[:,1],(5,-1)), interpolation='nearest')
-  subplot(2,3,3)
-  imshow(reshape(q[:,2],(5,-1)), interpolation='nearest')
-  subplot(2,3,4)
-  imshow(reshape(p[:,0],(5,-1)), interpolation='nearest')
-  subplot(2,3,5)
-  imshow(reshape(p[:,1],(5,-1)), interpolation='nearest')
-  subplot(2,3,6)
-  imshow(reshape(p[:,2],(5,-1)), interpolation='nearest')
+
+  lim = abs(p-q).max()
+  subplot(3,3,1)
+  imshow(reshape(q[:,0],(Nk,-1)), interpolation='nearest')
+  subplot(3,3,2)
+  imshow(reshape(q[:,1],(Nk,-1)), interpolation='nearest')
+  subplot(3,3,3)
+  imshow(reshape(q[:,2],(Nk,-1)), interpolation='nearest')
+  subplot(3,3,4)
+  imshow(reshape(p[:,0],(Nk,-1)), interpolation='nearest')
+  subplot(3,3,5)
+  imshow(reshape(p[:,1],(Nk,-1)), interpolation='nearest')
+  subplot(3,3,6)
+  imshow(reshape(p[:,2],(Nk,-1)), interpolation='nearest')
+  subplot(3,3,7)
+  imshow(reshape(p[:,0]-q[:,0],(Nk,-1)), interpolation='nearest', vmin=-lim, vmax=lim, cmap='RdBu')
+  subplot(3,3,8)
+  imshow(reshape(p[:,1]-q[:,1],(Nk,-1)), interpolation='nearest', vmin=-lim, vmax=lim, cmap='RdBu')
+  subplot(3,3,9)
+  imshow(reshape(p[:,2]-q[:,2],(Nk,-1)), interpolation='nearest', vmin=-lim, vmax=lim, cmap='RdBu')
+
+
+  ## Plot wireframe
+  fig = figure()
+  ax = p3.Axes3D(fig, aspect='equal')
+  title('Square mesh on 3D space', fontsize=20, fontweight='bold')
+  ax.axis('equal')
+  ax.plot_wireframe(q[:,0].reshape(Nl,Nk),q[:,1].reshape(Nl,Nk),q[:,2].reshape(Nl,Nk), color='b')
+  ax.plot_wireframe(p[:,0].reshape(Nl,Nk),p[:,1].reshape(Nl,Nk),p[:,2].reshape(Nl,Nk), color='r')
+
+  mrang = max([p[:,0].max()-p[:,0].min(), p[:,1].max()-p[:,1].min(), p[:,2].max()-p[:,2].min()])/2
+  midx = (p[:,0].max()+p[:,0].min())/2
+  midy = (p[:,1].max()+p[:,1].min())/2
+  midz = (p[:,2].max()+p[:,2].min())/2
+  ax.set_xlim3d(midx-mrang, midx+mrang)
+  ax.set_ylim3d(midy-mrang, midy+mrang)
+  ax.set_zlim3d(midz-mrang, midz+mrang)
 
   if False:
 
