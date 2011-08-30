@@ -175,34 +175,45 @@ def execute_test(k,tt):
 
 if __name__ == '__main__':
 
-  Nk = 5
-  Nl = 5
+  Nk = 7
+  Nl = 7
 
   calculate_U_and_V(Nl, Nk)
 
-  k = 2
-  tt = pi/5
-  q = generate_cyl_points(k,tt)
+  k = 10
+  tt = pi/6
+  q = generate_cyl_points(k,tt,Nk)
 
   Np = Nl*Nk
   pl0 = zeros(6*Np)
+
+  pl0[:3*Np] = q.ravel()
+
+  pl0[1*Np:3] = 0
 
   #print sys_eqs(pl, q)
   pl_opt, success = scipy.optimize.leastsq(sys_eqs, pl0, args=(q,))
 
   p = pl_opt.reshape(-1,3)[:Np]
-  subplot(2,3,1)
-  imshow(reshape(q[:,0],(5,-1)), interpolation='nearest')
-  subplot(2,3,2)
-  imshow(reshape(q[:,1],(5,-1)), interpolation='nearest')
-  subplot(2,3,3)
-  imshow(reshape(q[:,2],(5,-1)), interpolation='nearest')
-  subplot(2,3,4)
-  imshow(reshape(p[:,0],(5,-1)), interpolation='nearest')
-  subplot(2,3,5)
-  imshow(reshape(p[:,1],(5,-1)), interpolation='nearest')
-  subplot(2,3,6)
-  imshow(reshape(p[:,2],(5,-1)), interpolation='nearest')
+  suptitle('Point cloud, fitted coordinates, and errors', fontsize=20, fontweight='bold')
+  subplot(3,3,1)
+  imshow(reshape(q[:,0],(Nk,-1)), interpolation='nearest', vmin=-2, vmax=10, cmap='RdBu')
+  subplot(3,3,2)
+  imshow(reshape(q[:,1],(Nk,-1)), interpolation='nearest', vmin=-2, vmax=10, cmap='RdBu')
+  subplot(3,3,3)
+  imshow(reshape(q[:,2],(Nk,-1)), interpolation='nearest', vmin=-2, vmax=10, cmap='RdBu')
+  subplot(3,3,4)
+  imshow(reshape(p[:,0],(Nk,-1)), interpolation='nearest', vmin=-2, vmax=10, cmap='RdBu')
+  subplot(3,3,5)
+  imshow(reshape(p[:,1],(Nk,-1)), interpolation='nearest', vmin=-2, vmax=10, cmap='RdBu')
+  subplot(3,3,6)
+  imshow(reshape(p[:,2],(Nk,-1)), interpolation='nearest', vmin=-2, vmax=10, cmap='RdBu')
+  subplot(3,3,7)
+  imshow(reshape(p[:,0]-q[:,0],(Nk,-1)), interpolation='nearest', vmin=-0.1, vmax=0.1, cmap='RdBu')
+  subplot(3,3,8)
+  imshow(reshape(p[:,1]-q[:,1],(Nk,-1)), interpolation='nearest', vmin=-0.1, vmax=0.1, cmap='RdBu')
+  subplot(3,3,9)
+  imshow(reshape(p[:,2]-q[:,2],(Nk,-1)), interpolation='nearest', vmin=-0.1, vmax=0.1, cmap='RdBu')
 
   if False:
 
