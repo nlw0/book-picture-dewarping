@@ -115,11 +115,11 @@ def sys_jacobian(pl, q):
   dhdp = identity(3*Np) + (dot(U.T * U, l[:,3*[0]]) +
                            dot(V.T * V, l[:,3*[1]]) +
                            dot(U.T*V + V.T*U, l[:,3*[2]]) / 2)
-  dhdlu = U.T * c_[N*[p_u]].T
-  dhdlv = V.T * c_[N*[p_v]].T
-  dhdluv = (U.T * c_[N*[p_v]].T + V.T * c_[3*N*[p_u]].T) / 2
+  dhxdlu = U.T * c_[N*[p_u[:,0]]].T
+  #dhdlv = V.T * c_[N*[p_v]].T
+  #dhdluv = (U.T * c_[N*[p_v]].T + V.T * c_[3*N*[p_u]].T) / 2
   ## Interleave the lu lv and luvs
-  dhdl = reshape(c_[ravel(dhdlu.T), ravel(dhdlv.T), ravel(dhdluv.T)], 3*N, 3*N)
+  #dhdl = reshape(c_[ravel(dhdlu.T), ravel(dhdlv.T), ravel(dhdluv.T)], 3*N, 3*N)
 
   dgudp = 2 * U * c_[N*[p_u]]
   dgvdp = 2 * V * c_[N*[p_v]]
@@ -161,7 +161,7 @@ def calculate_U_and_V(Nl,Nk):
       elif l == Nl-1:
         dind -= Nk
 
-      ## Shigeru filter 3x3 doi://10.1109/34.841757  
+      ## Shigeru filter 3x3 doi://10.1109/34.841757
       U[ind, dind + eight_neighborhood] = array([-0.112737,0,0.112737,
                                                   -0.274526,0,0.274526,
                                                   -0.112737,0,0.112737])
@@ -246,7 +246,7 @@ if __name__ == '__main__':
   tt = 0.5*pi/3
   q = generate_cyl_points(k,tt,Nk)
 
-  q[:,1] *=2
+  # q[:,2] *= 1
 
   Np = Nl*Nk
   pl0 = zeros(6*Np)
