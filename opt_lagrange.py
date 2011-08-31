@@ -161,10 +161,17 @@ def calculate_U_and_V(Nl,Nk):
       elif l == Nl-1:
         dind -= Nk
 
+      ## Shigeru filter 3x3 doi://10.1109/34.841757  
+      U[ind, dind + eight_neighborhood] = array([-0.112737,0,0.112737,
+                                                  -0.274526,0,0.274526,
+                                                  -0.112737,0,0.112737])
+      V[ind, dind + eight_neighborhood] = array([-0.112737,-0.274526,-0.112737,
+                                                  0,0,0,
+                                                  0.112737,0.274526,0.112737])
       ## Sobel filter
-      U[ind, dind + eight_neighborhood] = array([-1,0,1,-2,0,2,-1,0,1])/8.
-      V[ind, dind + eight_neighborhood] = array([-1,-2,-1,0,0,0,1,2,1])/8.
-      ## Scharr_filter
+      #U[ind, dind + eight_neighborhood] = array([-1,0,1,-2,0,2,-1,0,1])/8.
+      #V[ind, dind + eight_neighborhood] = array([-1,-2,-1,0,0,0,1,2,1])/8.
+      ## Scharr filter
       #U[ind, dind + eight_neighborhood] = array([-3,0,3,-10,0,10,-3,0,3])/32.
       #V[ind, dind + eight_neighborhood] = array([-3,-10,-3,0,0,0,3,10,3])/32.
 
