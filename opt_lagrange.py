@@ -105,31 +105,65 @@ def sys_jacobian(pl, q):
   p_u = dot(U, p)
   p_v = dot(V, p)
 
-  ## Calculate "residue" function for each coordinate (p - q plus all the
-  ## magical lambdas), and calculate the values of the restriction functions.
+  ## These are "diagonal" matrices, with one xyz triplet every line. By
+  ## multiplying U or V with these we get the products we need in the correct
+  ## order. Of course you should not build this whole matrix in memory on a C
+  ## implementation, it's just to look pretty in Python.
+  p_u_diag = c_[p_u, zeros((N, 3*N))].reshape(-1,3*N)[:-1,:]
+  p_v_diag = c_[p_v, zeros((N, 3*N))].reshape(-1,3*N)[:-1,:]
 
-  ## The actual calculation of the "h" function, the decomposition of the
-  ## gradient of the original objective function as a linear combination of the
-  ## gradients of the "g" functions (constraints). The obscure l[:,3*[0]] is a
-  ## matrix with the first column of l replicated 3 times.
-  dhdp = identity(3*Np) + (dot(U.T * U, l[:,3*[0]]) +
-                           dot(V.T * V, l[:,3*[1]]) +
-                           dot(U.T*V + V.T*U, l[:,3*[2]]) / 2)
-  dhxdlu = U.T * c_[N*[p_u[:,0]]].T
-  #dhdlv = V.T * c_[N*[p_v]].T
-  #dhdluv = (U.T * c_[N*[p_v]].T + V.T * c_[3*N*[p_u]].T) / 2
-  ## Interleave the lu lv and luvs
-  #dhdl = reshape(c_[ravel(dhdlu.T), ravel(dhdlv.T), ravel(dhdluv.T)], 3*N, 3*N)
+  ## Derivative of the objective function (plus Lagrange stuff) relative to
+  ## coordinates. It is zero for any different dimensions, and is the same for
+  ## every three coordinates. So we can calculate the matrix once and replicate.
+  dhdp_base = identity(Np) + (dot(U.T * U, l[:,0]) + dot(V.T * V, l[:,1]) +
+                              dot(U.T*V + V.T*U, l[:,2]) / 2)
+  dhdp = zeros((3*N, 3*N))
+  dhdp[0::3,0::3] = dhdp_base
+  dhdp[1::3,1::3] = dhdp_base
+  dhdp[2::3,2::3] = dhdp_base
 
-  dgudp = 2 * U * c_[N*[p_u]]
-  dgvdp = 2 * V * c_[N*[p_v]]
-  dguvdp = U * c_[3*N*[p_v]] + V * c_[N*[p_u]]
+  ## Calculate derivatives of restriction functions relative to
+  ## coordinates. There is probably a smarter way to calculate all that... We
+  ## need to figure out the really optimal ordering of all the variables.
+  dhdl = zeros((3*N, 3*N))
+  dhxdlu = dot(U.T, diag(p_u[:,0]))
+  dhydlu = dot(U.T, diag(p_u[:,1]))
+  dhzdlu = dot(U.T, diag(p_u[:,2]))
+  dhxdlv = dot(V.T, diag(p_v[:,0]))
+  dhydlv = dot(V.T, diag(p_v[:,1]))
+  dhzdlv = dot(V.T, diag(p_v[:,2]))
+  dhxdluv = dot(U.T, diag(p_v[:,0])) + dot(V.T, diag(p_u[:,0]))
+  dhydluv = dot(U.T, diag(p_v[:,1])) + dot(V.T, diag(p_u[:,1]))
+  dhzdluv = dot(U.T, diag(p_v[:,2])) + dot(V.T, diag(p_u[:,2]))
+  dhdl[0::3,0::3] = dhxdlu
+  dhdl[1::3,0::3] = dhydlu
+  dhdl[2::3,0::3] = dhzdlu
+  dhdl[0::3,1::3] = dhxdlv
+  dhdl[1::3,1::3] = dhydlv
+  dhdl[2::3,1::3] = dhzdlv
+  dhdl[0::3,2::3] = dhxdluv
+  dhdl[1::3,2::3] = dhydluv
+  dhdl[2::3,2::3] = dhzdluv
 
+  ## Calculate derivatives of restriction functions relative to coordinates.
+  dgdp = zeros((3*N, 3*N))
+  dgdp[0::3,:] = 2 * dot(U, p_u_diag)
+  dgdp[1::3,:] = 2 * dot(V, p_v_diag)
+  dgdp[2::3,:] = dot(U, p_v_diag) + dot(V, p_u_diag)
 
+  ## Derivatives of restriction functions relative to multipliers are just 0.
   dgdl = zeros((3*N, 3*N))
 
-  return r_[ravel(h), ravel(g)]
+  ## Assemble result witht he four blocks
 
+  jacobian = zeros((6*N, 6*N))
+
+  jacobian[:3*N,:3*N] = dhdp
+  jacobian[:3*N,3*N:] = dhdl
+  jacobian[3*N:,:3*N] = dgdp
+  jacobian[3*N:,3*N:] = dgdl
+
+  return jacobian
 
 def calculate_U_and_V(Nl,Nk):
   global U
@@ -246,7 +280,7 @@ if __name__ == '__main__':
   tt = 0.5*pi/3
   q = generate_cyl_points(k,tt,Nk)
 
-  # q[:,2] *= 1
+  q[:,0] *= 1.5
 
   Np = Nl*Nk
   pl0 = zeros(6*Np)
@@ -255,7 +289,8 @@ if __name__ == '__main__':
   #pl0[1:3*Np:3] = .6
 
   #print sys_eqs(pl0, q)
-  pl_opt, success = scipy.optimize.leastsq(sys_eqs, pl0, args=(q,))
+  #pl_opt, success = scipy.optimize.leastsq(sys_eqs, pl0, args=(q,), Dfun=None)
+  pl_opt, success = scipy.optimize.leastsq(sys_eqs, pl0, args=(q,), Dfun=sys_jacobian)
 
   p = pl_opt.reshape(-1,3)[:Np]
 
