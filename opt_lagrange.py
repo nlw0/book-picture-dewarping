@@ -161,8 +161,12 @@ def calculate_U_and_V(Nl,Nk):
       elif l == Nl-1:
         dind -= Nk
 
+      ## Sobel filter
       U[ind, dind + eight_neighborhood] = array([-1,0,1,-2,0,2,-1,0,1])/8.
       V[ind, dind + eight_neighborhood] = array([-1,-2,-1,0,0,0,1,2,1])/8.
+      ## Scharr_filter
+      #U[ind, dind + eight_neighborhood] = array([-3,0,3,-10,0,10,-3,0,3])/32.
+      #V[ind, dind + eight_neighborhood] = array([-3,-10,-3,0,0,0,3,10,3])/32.
 
 
 
@@ -231,18 +235,11 @@ if __name__ == '__main__':
 
   calculate_U_and_V(Nl, Nk)
 
-<<<<<<< HEAD
   k = 2
   tt = 0.5*pi/3
   q = generate_cyl_points(k,tt,Nk)
 
-  q[:,1] *=1.5
-
-=======
-  k = 10
-  tt = pi/6
-  q = generate_cyl_points(k,tt,Nk)
->>>>>>> 13e03bb49ab90da0113f9b53c08291254b3754b9
+  q[:,1] *=2
 
   Np = Nl*Nk
   pl0 = zeros(6*Np)
@@ -250,7 +247,6 @@ if __name__ == '__main__':
   #pl0[:3*Np] = q.ravel()
   #pl0[1:3*Np:3] = .6
 
-<<<<<<< HEAD
   #print sys_eqs(pl0, q)
   pl_opt, success = scipy.optimize.leastsq(sys_eqs, pl0, args=(q,))
 
@@ -292,35 +288,6 @@ if __name__ == '__main__':
   ax.set_xlim3d(midx-mrang, midx+mrang)
   ax.set_ylim3d(midy-mrang, midy+mrang)
   ax.set_zlim3d(midz-mrang, midz+mrang)
-=======
-  pl0[:3*Np] = q.ravel()
-
-  pl0[1*Np:3] = 0
-
-  #print sys_eqs(pl, q)
-  pl_opt, success = scipy.optimize.leastsq(sys_eqs, pl0, args=(q,))
-
-  p = pl_opt.reshape(-1,3)[:Np]
-  suptitle('Point cloud, fitted coordinates, and errors', fontsize=20, fontweight='bold')
-  subplot(3,3,1)
-  imshow(reshape(q[:,0],(Nk,-1)), interpolation='nearest', vmin=-2, vmax=10, cmap='RdBu')
-  subplot(3,3,2)
-  imshow(reshape(q[:,1],(Nk,-1)), interpolation='nearest', vmin=-2, vmax=10, cmap='RdBu')
-  subplot(3,3,3)
-  imshow(reshape(q[:,2],(Nk,-1)), interpolation='nearest', vmin=-2, vmax=10, cmap='RdBu')
-  subplot(3,3,4)
-  imshow(reshape(p[:,0],(Nk,-1)), interpolation='nearest', vmin=-2, vmax=10, cmap='RdBu')
-  subplot(3,3,5)
-  imshow(reshape(p[:,1],(Nk,-1)), interpolation='nearest', vmin=-2, vmax=10, cmap='RdBu')
-  subplot(3,3,6)
-  imshow(reshape(p[:,2],(Nk,-1)), interpolation='nearest', vmin=-2, vmax=10, cmap='RdBu')
-  subplot(3,3,7)
-  imshow(reshape(p[:,0]-q[:,0],(Nk,-1)), interpolation='nearest', vmin=-0.1, vmax=0.1, cmap='RdBu')
-  subplot(3,3,8)
-  imshow(reshape(p[:,1]-q[:,1],(Nk,-1)), interpolation='nearest', vmin=-0.1, vmax=0.1, cmap='RdBu')
-  subplot(3,3,9)
-  imshow(reshape(p[:,2]-q[:,2],(Nk,-1)), interpolation='nearest', vmin=-0.1, vmax=0.1, cmap='RdBu')
->>>>>>> 13e03bb49ab90da0113f9b53c08291254b3754b9
 
   if False:
 
