@@ -115,8 +115,13 @@ def sys_jacobian(pl, q):
   ## Derivative of the objective function (plus Lagrange stuff) relative to
   ## coordinates. It is zero for any different dimensions, and is the same for
   ## every three coordinates. So we can calculate the matrix once and replicate.
-  dhdp_base = identity(Np) + (dot(U.T * U, l[:,0]) + dot(V.T * V, l[:,1]) +
-                              dot(U.T*V + V.T*U, l[:,2]) / 2)
+  # dhdp_base = identity(Np) + (dot(U.T * U, l[:,0]) + dot(V.T * V, l[:,1]) +
+  #                             dot(U.T*V + V.T*U, l[:,2]) / 2)
+  dhdp_base = identity(Np) + (dot(dot(U.T, diag(l[:,0])), U) +
+                              dot(dot(V.T, diag(l[:,1])), V) +
+                              (dot(dot(U.T, diag(l[:,2])),V) +
+                               dot(dot(V.T, diag(l[:,2])),U))/2)
+
   dhdp = zeros((3*N, 3*N))
   dhdp[0::3,0::3] = dhdp_base
   dhdp[1::3,1::3] = dhdp_base
@@ -271,26 +276,32 @@ def execute_test(k,tt):
 
 if __name__ == '__main__':
 
-  Nk = 7
-  Nl = 7
+  Nk = 13
+  Nl = 13
 
   calculate_U_and_V(Nl, Nk)
 
-  k = 2
+  k = 15
   tt = 0.5*pi/3
   q = generate_cyl_points(k,tt,Nk)
 
-  q[:,0] *= 1.5
+  #q[:,0] *= 1.5
 
   Np = Nl*Nk
   pl0 = zeros(6*Np)
-  pl0[:3*Np] = 0
-  #pl0[:3*Np] = q.ravel()
+  #pl0[:3*Np] = 0
+  pl0[:3*Np] = q.ravel()
   #pl0[1:3*Np:3] = .6
 
   #print sys_eqs(pl0, q)
-  #pl_opt, success = scipy.optimize.leastsq(sys_eqs, pl0, args=(q,), Dfun=None)
-  pl_opt, success = scipy.optimize.leastsq(sys_eqs, pl0, args=(q,), Dfun=sys_jacobian)
+  import time
+  a = time.clock()
+  Niter = 1
+  for kk in range(1):
+    #pl_opt, success = scipy.optimize.leastsq(sys_eqs, pl0, args=(q,), Dfun=None)
+    pl_opt, success = scipy.optimize.leastsq(sys_eqs, pl0, args=(q,), Dfun=sys_jacobian)
+  a = time.clock()-a
+  print 'Time: ', a/float(Niter)
 
   p = pl_opt.reshape(-1,3)[:Np]
 
