@@ -39,12 +39,13 @@ def devfunc(u, M):
 
 errfunc = lambda u, M, d_x: fitfunc(u, M) - d_x
 
-U = 0
-V = 0
-
-def sys_eqs(pl, q):
-  global U
-  global V
+def sys_eqs(pl, q, U, V):
+  '''This function outputs a vector with the values of the functions from the
+  big non-linear system of equations that we need to solve in order to fit the
+  inextensible surface. The solution is found by minimizing the sums of the
+  squares of these, e.g. using Levenberg-Marquards least-quares fitting. The
+  sys_jacobian function provides the jacobian matrix of this function to make
+  that better.'''
 
   assert (pl.shape[0] % 6) == 0
 
@@ -81,9 +82,12 @@ def sys_eqs(pl, q):
 
   return r_[ravel(h), ravel(g)]
 
-def sys_jacobian(pl, q):
-  global U
-  global V
+def sys_jacobian(pl, q, U, V):
+  '''This function returns the Jacobian martix of the target function to fit an
+  inextensible surface to given data. It receives q (associated measurements) as
+  a parameter because it is necessary in sys_eqs, but it is never used for this
+  specific and simple distance function used.
+  '''
 
   assert (pl.shape[0] % 6) == 0
 
@@ -105,13 +109,6 @@ def sys_jacobian(pl, q):
   p_u = dot(U, p)
   p_v = dot(V, p)
 
-  ## These are "diagonal" matrices, with one xyz triplet every line. By
-  ## multiplying U or V with these we get the products we need in the correct
-  ## order. Of course you should not build this whole matrix in memory on a C
-  ## implementation, it's just to look pretty in Python.
-  p_u_diag = c_[p_u, zeros((N, 3*N))].reshape(-1,3*N)[:-1,:]
-  p_v_diag = c_[p_v, zeros((N, 3*N))].reshape(-1,3*N)[:-1,:]
-
   ## Derivative of the objective function (plus Lagrange stuff) relative to
   ## coordinates. It is zero for any different dimensions, and is the same for
   ## every three coordinates. So we can calculate the matrix once and replicate.
@@ -128,33 +125,53 @@ def sys_jacobian(pl, q):
   dhdp[2::3,2::3] = dhdp_base
 
   ## Calculate derivatives of restriction functions relative to
-  ## coordinates. There is probably a smarter way to calculate all that... We
-  ## need to figure out the really optimal ordering of all the variables.
-  dhdl = zeros((3*N, 3*N))
-  dhxdlu = dot(U.T, diag(p_u[:,0]))
-  dhydlu = dot(U.T, diag(p_u[:,1]))
-  dhzdlu = dot(U.T, diag(p_u[:,2]))
-  dhxdlv = dot(V.T, diag(p_v[:,0]))
-  dhydlv = dot(V.T, diag(p_v[:,1]))
-  dhzdlv = dot(V.T, diag(p_v[:,2]))
-  dhxdluv = dot(U.T, diag(p_v[:,0])) + dot(V.T, diag(p_u[:,0]))
-  dhydluv = dot(U.T, diag(p_v[:,1])) + dot(V.T, diag(p_u[:,1]))
-  dhzdluv = dot(U.T, diag(p_v[:,2])) + dot(V.T, diag(p_u[:,2]))
-  dhdl[0::3,0::3] = dhxdlu
-  dhdl[1::3,0::3] = dhydlu
-  dhdl[2::3,0::3] = dhzdlu
-  dhdl[0::3,1::3] = dhxdlv
-  dhdl[1::3,1::3] = dhydlv
-  dhdl[2::3,1::3] = dhzdlv
-  dhdl[0::3,2::3] = dhxdluv
-  dhdl[1::3,2::3] = dhydluv
-  dhdl[2::3,2::3] = dhzdluv
-
-  ## Calculate derivatives of restriction functions relative to coordinates.
+  ## coordinates. There is probably a smarter way to calculate all that. We need
+  ## to figure out the really optimal ordering of all the variables, etc.
   dgdp = zeros((3*N, 3*N))
-  dgdp[0::3,:] = 2 * dot(U, p_u_diag)
-  dgdp[1::3,:] = 2 * dot(V, p_v_diag)
-  dgdp[2::3,:] = dot(U, p_v_diag) + dot(V, p_u_diag)
+  dgudpx = 2 * dot(diag(p_u[:,0]), U)
+  dgudpy = 2 * dot(diag(p_u[:,1]), U)
+  dgudpz = 2 * dot(diag(p_u[:,2]), U)
+  dgvdpx = 2 * dot(diag(p_v[:,0]), V)
+  dgvdpy = 2 * dot(diag(p_v[:,1]), V)
+  dgvdpz = 2 * dot(diag(p_v[:,2]), V)
+  dguvdpx = dot(diag(p_v[:,0]), U) + dot(diag(p_u[:,0]), V)
+  dguvdpy = dot(diag(p_v[:,1]), U) + dot(diag(p_u[:,1]), V)
+  dguvdpz = dot(diag(p_v[:,2]), U) + dot(diag(p_u[:,2]), V)
+  dgdp[0::3,0::3] = dgudpx
+  dgdp[0::3,1::3] = dgudpy
+  dgdp[0::3,2::3] = dgudpz
+  dgdp[1::3,0::3] = dgvdpx
+  dgdp[1::3,1::3] = dgvdpy
+  dgdp[1::3,2::3] = dgvdpz
+  dgdp[2::3,0::3] = dguvdpx
+  dgdp[2::3,1::3] = dguvdpy
+  dgdp[2::3,2::3] = dguvdpz
+
+  ## Calculate derivatives of objective function gradient relative to Lagrange
+  ## multipliers. It turns out it's just the transpose of the dgdp, scaled. That
+  ## probably means something good.
+  if True:
+    dhdl = 0.5*dgdp.T
+  else:
+    dhdl = zeros((3*N, 3*N))
+    dhxdlu = dot(U.T, diag(p_u[:,0]))
+    dhydlu = dot(U.T, diag(p_u[:,1]))
+    dhzdlu = dot(U.T, diag(p_u[:,2]))
+    dhxdlv = dot(V.T, diag(p_v[:,0]))
+    dhydlv = dot(V.T, diag(p_v[:,1]))
+    dhzdlv = dot(V.T, diag(p_v[:,2]))
+    dhxdluv = dot(U.T, diag(p_v[:,0])) + dot(V.T, diag(p_u[:,0]))/2
+    dhydluv = dot(U.T, diag(p_v[:,1])) + dot(V.T, diag(p_u[:,1]))/2
+    dhzdluv = dot(U.T, diag(p_v[:,2])) + dot(V.T, diag(p_u[:,2]))/2
+    dhdl[0::3,0::3] = dhxdlu
+    dhdl[1::3,0::3] = dhydlu
+    dhdl[2::3,0::3] = dhzdlu
+    dhdl[0::3,1::3] = dhxdlv
+    dhdl[1::3,1::3] = dhydlv
+    dhdl[2::3,1::3] = dhzdlv
+    dhdl[0::3,2::3] = dhxdluv
+    dhdl[1::3,2::3] = dhydluv
+    dhdl[2::3,2::3] = dhzdluv
 
   ## Derivatives of restriction functions relative to multipliers are just 0.
   dgdl = zeros((3*N, 3*N))
@@ -214,78 +231,30 @@ def calculate_U_and_V(Nl,Nk):
       #U[ind, dind + eight_neighborhood] = array([-3,0,3,-10,0,10,-3,0,3])/32.
       #V[ind, dind + eight_neighborhood] = array([-3,-10,-3,0,0,0,3,10,3])/32.
 
-
-
-
-def execute_test(k,tt):
-  x = generate_cyl_points(k,tt)
-
-  Np = x.shape[0]
-  q = 4
-  con = []
-  for a in range(Np):
-    if a%q != (q-1):
-      con.append((a, a+1))
-    if a < (Np-q):
-      con.append((a, a+q))
-      if a%q != (q-1):
-        con.append((a, a+q+1))
-
-  con=array(con, dtype=uint8)
-
-  print con
-
-  Ned = con.shape[0]
-
-  print 'Np', Np
-  print 'Ned', Ned
-
-
-  M = zeros((2*Np, 2*Ned+3))
-  d_x = zeros(Ned+3)
-
-  for i in range(Ned):
-    a,b = con[i]
-
-    M[a*2,2*i] = 1
-    M[b*2,2*i] = -1
-    M[a*2+1,2*i+1] = 1
-    M[b*2+1,2*i+1] = -1
-    d_x[i] = ((x[a]-x[b])**2).sum()
-
-  M[0,-3] = 1
-  M[1,-2] = 1
-  M[3,-1] = 1
-
-  print 'Ms', M.shape
-
-
-  ## Start as a square mesh, with first point centered and second over x axis
-  # u0 = reshape(x[:,[0,2]]-x[0,[0,2]],-1)
-  # u0 = reshape(x[:,[0,2]]-x[0,[0,2]],-1)
-  u0 = reshape(.0+mgrid[0:4,0:4].T,-1)
-  # pdb.set_trace()
-
-  ## Fit this baby
-  u_opt, success = scipy.optimize.leastsq(errfunc, u0, args=(M, d_x,))
-
-  final_err = (errfunc(u_opt, M, d_x)**2).sum()
-  print 'final err:', final_err
-
-  return reshape(u0,(-1,2)), reshape(u_opt,(-1,2)), con, final_err
-
 if __name__ == '__main__':
 
-  Nk = 13
-  Nl = 13
+  Nk = 7
+  Nl = 7
 
   calculate_U_and_V(Nl, Nk)
 
-  k = 15
+  k = 5 #20
   tt = 0.5*pi/3
-  q = generate_cyl_points(k,tt,Nk)
+  oversample = 5
+  Nko = Nk * oversample
+  Nlo = Nl * oversample
+  #q_data = generate_cyl_points(k,tt,Nk*oversample)/5.8
+  q_data = generate_cyl_points(k,tt,Nk*oversample)/9
+  #q_data = generate_cyl_points(k,tt,Nk*oversample)/3.5
 
-  #q[:,0] *= 1.5
+  q = c_[q_data[:,0].reshape(Nlo,Nko)[oversample/2::oversample,oversample/2::oversample].ravel(),
+         q_data[:,1].reshape(Nlo,Nko)[oversample/2::oversample,oversample/2::oversample].ravel(),
+         q_data[:,2].reshape(Nlo,Nko)[oversample/2::oversample,oversample/2::oversample].ravel(),
+         ]
+
+  #q_data.reshape(Nk*oversample,-1,3)[oversample/2::oversample,oversample/2::oversample,:].reshape(-1,3)
+
+  #q[:,2] *= 1.5
 
   Np = Nl*Nk
   pl0 = zeros(6*Np)
@@ -298,8 +267,8 @@ if __name__ == '__main__':
   a = time.clock()
   Niter = 1
   for kk in range(1):
-    #pl_opt, success = scipy.optimize.leastsq(sys_eqs, pl0, args=(q,), Dfun=None)
-    pl_opt, success = scipy.optimize.leastsq(sys_eqs, pl0, args=(q,), Dfun=sys_jacobian)
+    #pl_opt, success = scipy.optimize.leastsq(sys_eqs, pl0, args=(q,U,V), Dfun=None)
+    pl_opt, success = scipy.optimize.leastsq(sys_eqs, pl0, args=(q,U,V), Dfun=sys_jacobian)
   a = time.clock()-a
   print 'Time: ', a/float(Niter)
 
@@ -331,7 +300,8 @@ if __name__ == '__main__':
   ax = p3.Axes3D(fig, aspect='equal')
   title('Square mesh on 3D space', fontsize=20, fontweight='bold')
   ax.axis('equal')
-  ax.plot_wireframe(q[:,0].reshape(Nl,Nk),q[:,1].reshape(Nl,Nk),q[:,2].reshape(Nl,Nk), color='b')
+  #ax.plot_wireframe(q_data[:,0].reshape(Nl*oversample,Nk*oversample),q_data[:,1].reshape(Nl*oversample,Nk*oversample),q_data[:,2].reshape(Nl*oversample,Nk*oversample), color='b')
+  ax.plot_wireframe(q[:,0].reshape(Nl,Nk),q[:,1].reshape(Nl,Nk),q[:,2].reshape(Nl,Nk), color='g')
   ax.plot_wireframe(p[:,0].reshape(Nl,Nk),p[:,1].reshape(Nl,Nk),p[:,2].reshape(Nl,Nk), color='r')
 
   mrang = max([p[:,0].max()-p[:,0].min(), p[:,1].max()-p[:,1].min(), p[:,2].max()-p[:,2].min()])/2
@@ -361,7 +331,7 @@ if __name__ == '__main__':
       axis([-1, 4, -.75, 3.75])
       xlim(-.75,3.75)
 
-    k = 2
+    k = 1
     x = generate_cyl_points(k,tt)
     subplot(2,3,1)
     title('Original xz coords, k=%d'%(100./k))
