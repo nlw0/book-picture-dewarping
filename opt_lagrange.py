@@ -15,6 +15,7 @@
 ###############################################################################
 ## This program is to develop and test the new optimization target function,
 ## based on Lagrange multipliers.
+###############################################################################
 
 from pylab import *
 
@@ -76,6 +77,7 @@ def sys_eqs(pl, q, U, V):
                dot(V.T, l[:,3*[1]] * p_v) +
                (dot(U.T, l[:,3*[2]] * p_v) + dot(V.T, l[:,3*[2]] * p_u)) / 2)
 
+  ## The restriction functions, pretty straight forward.
   g = c_[(p_u**2).sum(1) - 1,
          (p_v**2).sum(1) - 1,
          (p_u*p_v).sum(1)]
@@ -150,36 +152,13 @@ def sys_jacobian(pl, q, U, V):
   ## Calculate derivatives of objective function gradient relative to Lagrange
   ## multipliers. It turns out it's just the transpose of the dgdp, scaled. That
   ## probably means something good.
-  if True:
-    dhdl = 0.5*dgdp.T
-  else:
-    dhdl = zeros((3*N, 3*N))
-    dhxdlu = dot(U.T, diag(p_u[:,0]))
-    dhydlu = dot(U.T, diag(p_u[:,1]))
-    dhzdlu = dot(U.T, diag(p_u[:,2]))
-    dhxdlv = dot(V.T, diag(p_v[:,0]))
-    dhydlv = dot(V.T, diag(p_v[:,1]))
-    dhzdlv = dot(V.T, diag(p_v[:,2]))
-    dhxdluv = dot(U.T, diag(p_v[:,0])) + dot(V.T, diag(p_u[:,0]))/2
-    dhydluv = dot(U.T, diag(p_v[:,1])) + dot(V.T, diag(p_u[:,1]))/2
-    dhzdluv = dot(U.T, diag(p_v[:,2])) + dot(V.T, diag(p_u[:,2]))/2
-    dhdl[0::3,0::3] = dhxdlu
-    dhdl[1::3,0::3] = dhydlu
-    dhdl[2::3,0::3] = dhzdlu
-    dhdl[0::3,1::3] = dhxdlv
-    dhdl[1::3,1::3] = dhydlv
-    dhdl[2::3,1::3] = dhzdlv
-    dhdl[0::3,2::3] = dhxdluv
-    dhdl[1::3,2::3] = dhydluv
-    dhdl[2::3,2::3] = dhzdluv
+  dhdl = 0.5*dgdp.T
 
   ## Derivatives of restriction functions relative to multipliers are just 0.
   dgdl = zeros((3*N, 3*N))
 
   ## Assemble result witht he four blocks
-
   jacobian = zeros((6*N, 6*N))
-
   jacobian[:3*N,:3*N] = dhdp
   jacobian[:3*N,3*N:] = dhdl
   jacobian[3*N:,:3*N] = dgdp
@@ -188,9 +167,6 @@ def sys_jacobian(pl, q, U, V):
   return jacobian
 
 def calculate_U_and_V(Nl,Nk):
-  global U
-  global V
-
   U = zeros((Nl*Nk,Nl*Nk))
   V = zeros((Nl*Nk,Nl*Nk))
 
@@ -231,20 +207,27 @@ def calculate_U_and_V(Nl,Nk):
       #U[ind, dind + eight_neighborhood] = array([-3,0,3,-10,0,10,-3,0,3])/32.
       #V[ind, dind + eight_neighborhood] = array([-3,-10,-3,0,0,0,3,10,3])/32.
 
+  return U, V
+
 if __name__ == '__main__':
 
-  Nk = 7
+
+  ## Size of the model, lines and columns
   Nl = 7
+  Nk = 7
 
-  calculate_U_and_V(Nl, Nk)
+  ## Calculates the U and V matrices. (Partial derivatives on u and v directions).
+  U, V = calculate_U_and_V(Nl, Nk)
 
-  k = 5 #20
-  tt = 0.5*pi/3
+  ## Gnerate points over a cylinder for test.
+  k = 20 # Curvature
+  tt = 0.5*pi/3 # Angle between the mesh and cylinder axis
   oversample = 5
   Nko = Nk * oversample
   Nlo = Nl * oversample
-  #q_data = generate_cyl_points(k,tt,Nk*oversample)/5.8
-  q_data = generate_cyl_points(k,tt,Nk*oversample)/9
+  q_data = generate_cyl_points(k,tt,Nk*oversample)/5.8
+  #q_data = generate_cyl_points(k,tt,Nk*oversample)/6.
+  #q_data = generate_cyl_points(k,tt,Nk*oversample)/5
   #q_data = generate_cyl_points(k,tt,Nk*oversample)/3.5
 
   q = c_[q_data[:,0].reshape(Nlo,Nko)[oversample/2::oversample,oversample/2::oversample].ravel(),
@@ -252,55 +235,26 @@ if __name__ == '__main__':
          q_data[:,2].reshape(Nlo,Nko)[oversample/2::oversample,oversample/2::oversample].ravel(),
          ]
 
-  #q_data.reshape(Nk*oversample,-1,3)[oversample/2::oversample,oversample/2::oversample,:].reshape(-1,3)
-
-  #q[:,2] *= 1.5
-
   Np = Nl*Nk
   pl0 = zeros(6*Np)
-  #pl0[:3*Np] = 0
-  pl0[:3*Np] = q.ravel()
-  #pl0[1:3*Np:3] = .6
+  pl0[:3*Np] = 0
+  #pl0[:3*Np] = q.ravel()
 
-  #print sys_eqs(pl0, q)
-  import time
-  a = time.clock()
-  Niter = 1
-  for kk in range(1):
-    #pl_opt, success = scipy.optimize.leastsq(sys_eqs, pl0, args=(q,U,V), Dfun=None)
-    pl_opt, success = scipy.optimize.leastsq(sys_eqs, pl0, args=(q,U,V), Dfun=sys_jacobian)
-  a = time.clock()-a
-  print 'Time: ', a/float(Niter)
+  ## Run optimization
+  pl_opt, success = scipy.optimize.leastsq(sys_eqs, pl0, args=(q,U,V), Dfun=sys_jacobian)
 
+  ## Get the estimated coordinates, organize (and dump multipliers)
   p = pl_opt.reshape(-1,3)[:Np]
 
-  lim = abs(p-q).max()
-  subplot(3,3,1)
-  imshow(reshape(q[:,0],(Nk,-1)), interpolation='nearest')
-  subplot(3,3,2)
-  imshow(reshape(q[:,1],(Nk,-1)), interpolation='nearest')
-  subplot(3,3,3)
-  imshow(reshape(q[:,2],(Nk,-1)), interpolation='nearest')
-  subplot(3,3,4)
-  imshow(reshape(p[:,0],(Nk,-1)), interpolation='nearest')
-  subplot(3,3,5)
-  imshow(reshape(p[:,1],(Nk,-1)), interpolation='nearest')
-  subplot(3,3,6)
-  imshow(reshape(p[:,2],(Nk,-1)), interpolation='nearest')
-  subplot(3,3,7)
-  imshow(reshape(p[:,0]-q[:,0],(Nk,-1)), interpolation='nearest', vmin=-lim, vmax=lim, cmap='RdBu')
-  subplot(3,3,8)
-  imshow(reshape(p[:,1]-q[:,1],(Nk,-1)), interpolation='nearest', vmin=-lim, vmax=lim, cmap='RdBu')
-  subplot(3,3,9)
-  imshow(reshape(p[:,2]-q[:,2],(Nk,-1)), interpolation='nearest', vmin=-lim, vmax=lim, cmap='RdBu')
+  #############################################################################
+  ## Plot stuff
 
-
-  ## Plot wireframe
+  ## Plot wireframes of input and resulting model
   fig = figure()
   ax = p3.Axes3D(fig, aspect='equal')
   title('Square mesh on 3D space', fontsize=20, fontweight='bold')
   ax.axis('equal')
-  #ax.plot_wireframe(q_data[:,0].reshape(Nl*oversample,Nk*oversample),q_data[:,1].reshape(Nl*oversample,Nk*oversample),q_data[:,2].reshape(Nl*oversample,Nk*oversample), color='b')
+  ax.plot_wireframe(q_data[:,0].reshape(Nl*oversample,Nk*oversample),q_data[:,1].reshape(Nl*oversample,Nk*oversample),q_data[:,2].reshape(Nl*oversample,Nk*oversample), color='b')
   ax.plot_wireframe(q[:,0].reshape(Nl,Nk),q[:,1].reshape(Nl,Nk),q[:,2].reshape(Nl,Nk), color='g')
   ax.plot_wireframe(p[:,0].reshape(Nl,Nk),p[:,1].reshape(Nl,Nk),p[:,2].reshape(Nl,Nk), color='r')
 
@@ -311,32 +265,3 @@ if __name__ == '__main__':
   ax.set_xlim3d(midx-mrang, midx+mrang)
   ax.set_ylim3d(midy-mrang, midy+mrang)
   ax.set_zlim3d(midz-mrang, midz+mrang)
-
-  if False:
-
-    figure(1, figsize=[12,8])
-    suptitle('Cylinder dewarping with simple distance model, different curvatures', fontsize=20, fontweight='bold')
-
-    tt = pi/5
-    for en,k in enumerate([ .5, 1, 2, 3, 7]):
-      subplot(2,3,en+2)
-      u0, ua, con, err = execute_test(k, tt)
-      title('k = %d, err=%5.2f'%((100./k), err))
-      Ned = con.shape[0]
-      for i in range(Ned):
-        plot( u0[con[i],0], u0[con[i],1], 'b-x')
-        plot( ua[con[i],0], ua[con[i],1], 'r-x')
-      grid()
-      axis('equal')
-      axis([-1, 4, -.75, 3.75])
-      xlim(-.75,3.75)
-
-    k = 1
-    x = generate_cyl_points(k,tt)
-    subplot(2,3,1)
-    title('Original xz coords, k=%d'%(100./k))
-    for i in range(Ned):
-      plot( x[con[i],0], x[con[i],2], 'g-x')
-    grid()
-    axis('equal')
-    axis([-1, 4, -1.75, 2.75])
