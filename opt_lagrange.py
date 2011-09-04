@@ -237,8 +237,14 @@ if __name__ == '__main__':
 
   Np = Nl*Nk
   pl0 = zeros(6*Np)
-  pl0[:3*Np] = 0
-  #pl0[:3*Np] = q.ravel()
+
+  p0 = mgrid[:1,-2:Nk-2,-1:Nl-1].reshape(3,-1).T
+  p0[:,0] = mean(q[:,0])
+
+  pl0[:3*Np] = p0.ravel()
+  
+  # pl0[:3*Np] = 0
+  # pl0[:3*Np] = q.ravel()
 
   ## Run optimization
   pl_opt, success = scipy.optimize.leastsq(sys_eqs, pl0, args=(q,U,V), Dfun=sys_jacobian)
@@ -255,6 +261,7 @@ if __name__ == '__main__':
   title('Square mesh on 3D space', fontsize=20, fontweight='bold')
   ax.axis('equal')
   ax.plot_wireframe(q_data[:,0].reshape(Nl*oversample,Nk*oversample),q_data[:,1].reshape(Nl*oversample,Nk*oversample),q_data[:,2].reshape(Nl*oversample,Nk*oversample), color='b')
+  ax.plot_wireframe(p0[:,0].reshape(Nl,Nk),p0[:,1].reshape(Nl,Nk),p0[:,2].reshape(Nl,Nk), color='#880000')
   ax.plot_wireframe(q[:,0].reshape(Nl,Nk),q[:,1].reshape(Nl,Nk),q[:,2].reshape(Nl,Nk), color='g')
   ax.plot_wireframe(p[:,0].reshape(Nl,Nk),p[:,1].reshape(Nl,Nk),p[:,2].reshape(Nl,Nk), color='r')
 
