@@ -27,19 +27,6 @@ import mpl_toolkits.mplot3d.axes3d as p3
 from  scipy.optimize import leastsq
 ion()
 
-def fitfunc(u, M):
-  Ned = (M.shape[1]-3)/2
-  R = zeros(Ned+3)
-  D = dot(u,M)**2
-  R[:Ned] = D[0:-3:2]+D[1:-3:2]
-  R[-3:] = D[-3:]
-  return R
-
-def devfunc(u, M):
-  return 2*dot(u,M)
-
-errfunc = lambda u, M, d_x: fitfunc(u, M) - d_x
-
 def sys_eqs(pl, q, U, V):
   '''This function outputs a vector with the values of the functions from the
   big non-linear system of equations that we need to solve in order to fit the
@@ -85,10 +72,11 @@ def sys_eqs(pl, q, U, V):
   return r_[ravel(h), ravel(g)]
 
 def sys_jacobian(pl, q, U, V):
-  '''This function returns the Jacobian martix of the target function to fit an
+  '''This function returns the Jacobian matrix of the target function to fit an
   inextensible surface to given data. It receives q (associated measurements) as
-  a parameter because it is necessary in sys_eqs, but it is never used for this
-  specific and simple distance function used.
+  a parameter because it is necessary in sys_eqs, but it is never used in the
+  Jacobian calculation. At least this is the case for this specific and simple
+  distance function used...
   '''
 
   assert (pl.shape[0] % 6) == 0
@@ -114,8 +102,6 @@ def sys_jacobian(pl, q, U, V):
   ## Derivative of the objective function (plus Lagrange stuff) relative to
   ## coordinates. It is zero for any different dimensions, and is the same for
   ## every three coordinates. So we can calculate the matrix once and replicate.
-  # dhdp_base = identity(Np) + (dot(U.T * U, l[:,0]) + dot(V.T * V, l[:,1]) +
-  #                             dot(U.T*V + V.T*U, l[:,2]) / 2)
   dhdp_base = identity(Np) + (dot(dot(U.T, diag(l[:,0])), U) +
                               dot(dot(V.T, diag(l[:,1])), V) +
                               (dot(dot(U.T, diag(l[:,2])),V) +
@@ -213,22 +199,22 @@ if __name__ == '__main__':
 
 
   ## Size of the model, lines and columns
-  Nl = 7
-  Nk = 7
+  Nl = 10
+  Nk = 10
 
   ## Calculates the U and V matrices. (Partial derivatives on u and v directions).
   U, V = calculate_U_and_V(Nl, Nk)
 
   ## Gnerate points over a cylinder for test.
-  k = 20 # Curvature
+  k = 50 # Curvature
   tt = 0.5*pi/3 # Angle between the mesh and cylinder axis
   oversample = 5
   Nko = Nk * oversample
   Nlo = Nl * oversample
-  q_data = generate_cyl_points(k,tt,Nk*oversample)/5.8
+  #q_data = generate_cyl_points(k,tt,Nk*oversample)/5.8
   #q_data = generate_cyl_points(k,tt,Nk*oversample)/6.
   #q_data = generate_cyl_points(k,tt,Nk*oversample)/5
-  #q_data = generate_cyl_points(k,tt,Nk*oversample)/3.5
+  q_data = generate_cyl_points(k,tt,Nk*oversample)/3.5
 
   q = c_[q_data[:,0].reshape(Nlo,Nko)[oversample/2::oversample,oversample/2::oversample].ravel(),
          q_data[:,1].reshape(Nlo,Nko)[oversample/2::oversample,oversample/2::oversample].ravel(),
@@ -238,8 +224,9 @@ if __name__ == '__main__':
   Np = Nl*Nk
   pl0 = zeros(6*Np)
 
-  p0 = mgrid[:1,-2:Nk-2,-1:Nl-1].reshape(3,-1).T
-  p0[:,0] = mean(q[:,0])
+  p0 = mgrid[:Nk,:1,:Nl].reshape(3,-1).T
+  p0[:,1] = mean(q[:,1])
+  p0 = array(p0[:,[2,1,0]], dtype='float')
 
   pl0[:3*Np] = p0.ravel()
 
@@ -247,7 +234,8 @@ if __name__ == '__main__':
   # pl0[:3*Np] = q.ravel()
 
   ## Run optimization
-  pl_opt, success = scipy.optimize.leastsq(sys_eqs, pl0, args=(q,U,V), Dfun=sys_jacobian)
+  #pl_opt, success = scipy.optimize.leastsq(sys_eqs, pl0, args=(q,U,V), Dfun=sys_jacobian)
+  pl_opt = pl0
 
   ## Get the estimated coordinates, organize (and dump multipliers)
   p = pl_opt.reshape(-1,3)[:Np]
@@ -272,3 +260,16 @@ if __name__ == '__main__':
   ax.set_xlim3d(midx-mrang, midx+mrang)
   ax.set_ylim3d(midy-mrang, midy+mrang)
   ax.set_zlim3d(midz-mrang, midz+mrang)
+
+  ## Plot the columns and lines from the SVD of V and U matrices...
+  # u,s,v = svd(V)
+  u,s,v = svd(U)
+  for kk in max(64, range(u.shape[0])):
+    figure(3)
+    uu = u[:,kk]
+    subplot(8,8,kk+1)
+    imshow(uu.reshape(Nl, Nk), cmap='RdBu', interpolation='nearest')
+    figure(4)
+    uu = v[kk,:]
+    subplot(8,8,kk+1)
+    imshow(uu.reshape(Nl, Nk), cmap='RdBu', interpolation='nearest')
