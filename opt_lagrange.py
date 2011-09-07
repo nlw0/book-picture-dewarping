@@ -199,13 +199,14 @@ if __name__ == '__main__':
 
 
   ## Size of the model, lines and columns
-  Nl = 10
-  Nk = 10
+  Nl = 7
+  Nk = 7
+  Np = Nl*Nk # Total number of points
 
   ## Calculates the U and V matrices. (Partial derivatives on u and v directions).
   U, V = calculate_U_and_V(Nl, Nk)
 
-  ## Gnerate points over a cylinder for test.
+  ## Generate points over a cylinder for test.
   k = 50 # Curvature
   tt = 0.5*pi/3 # Angle between the mesh and cylinder axis
   oversample = 5
@@ -216,26 +217,21 @@ if __name__ == '__main__':
   #q_data = generate_cyl_points(k,tt,Nk*oversample)/5
   q_data = generate_cyl_points(k,tt,Nk*oversample)/3.5
 
+  ## Initial guess, Points over the xy plane
+  pl0 = zeros(6*Np)
+  p0 = .0 + mgrid[:Nk,:Nl,:1].reshape(3,-1).T
+  p0[:,2] = mean(q_data[:,2])
+  p0 += array([2,2,0])
+  pl0[:3*Np] = p0.ravel()
+
+  ## Taget points
   q = c_[q_data[:,0].reshape(Nlo,Nko)[oversample/2::oversample,oversample/2::oversample].ravel(),
          q_data[:,1].reshape(Nlo,Nko)[oversample/2::oversample,oversample/2::oversample].ravel(),
          q_data[:,2].reshape(Nlo,Nko)[oversample/2::oversample,oversample/2::oversample].ravel(),
          ]
 
-  Np = Nl*Nk
-  pl0 = zeros(6*Np)
-
-  p0 = mgrid[:Nk,:1,:Nl].reshape(3,-1).T
-  p0[:,1] = mean(q[:,1])
-  p0 = array(p0[:,[2,1,0]], dtype='float')
-
-  pl0[:3*Np] = p0.ravel()
-
-  # pl0[:3*Np] = 0
-  # pl0[:3*Np] = q.ravel()
-
   ## Run optimization
-  #pl_opt, success = scipy.optimize.leastsq(sys_eqs, pl0, args=(q,U,V), Dfun=sys_jacobian)
-  pl_opt = pl0
+  pl_opt, success = scipy.optimize.leastsq(sys_eqs, pl0, args=(q,U,V), Dfun=sys_jacobian)
 
   ## Get the estimated coordinates, organize (and dump multipliers)
   p = pl_opt.reshape(-1,3)[:Np]
@@ -249,7 +245,7 @@ if __name__ == '__main__':
   title('Square mesh on 3D space', fontsize=20, fontweight='bold')
   ax.axis('equal')
   ax.plot_wireframe(q_data[:,0].reshape(Nl*oversample,Nk*oversample),q_data[:,1].reshape(Nl*oversample,Nk*oversample),q_data[:,2].reshape(Nl*oversample,Nk*oversample), color='b')
-  ax.plot_wireframe(p0[:,0].reshape(Nl,Nk),p0[:,1].reshape(Nl,Nk),p0[:,2].reshape(Nl,Nk), color='#880000')
+  ax.plot_wireframe(p0[:,0].reshape(Nl,Nk),p0[:,1].reshape(Nl,Nk),p0[:,2].reshape(Nl,Nk), color='#008844')
   ax.plot_wireframe(q[:,0].reshape(Nl,Nk),q[:,1].reshape(Nl,Nk),q[:,2].reshape(Nl,Nk), color='g')
   ax.plot_wireframe(p[:,0].reshape(Nl,Nk),p[:,1].reshape(Nl,Nk),p[:,2].reshape(Nl,Nk), color='r')
 
@@ -260,16 +256,3 @@ if __name__ == '__main__':
   ax.set_xlim3d(midx-mrang, midx+mrang)
   ax.set_ylim3d(midy-mrang, midy+mrang)
   ax.set_zlim3d(midz-mrang, midz+mrang)
-
-  ## Plot the columns and lines from the SVD of V and U matrices...
-  # u,s,v = svd(V)
-  u,s,v = svd(U)
-  for kk in max(64, range(u.shape[0])):
-    figure(3)
-    uu = u[:,kk]
-    subplot(8,8,kk+1)
-    imshow(uu.reshape(Nl, Nk), cmap='RdBu', interpolation='nearest')
-    figure(4)
-    uu = v[kk,:]
-    subplot(8,8,kk+1)
-    imshow(uu.reshape(Nl, Nk), cmap='RdBu', interpolation='nearest')
