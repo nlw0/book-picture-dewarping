@@ -249,9 +249,21 @@ class SquareMesh:
     self.intparam.crop(bbox)
 
   def smash(self):
-    ## Deal with outliers, just look for the maximum value outside of the maximum possible, then make the outliers the same.
+    ## Deal with outliers, just look for the maximum value outside of the
+    ## maximum possible, then make the outliers the same. The better procedures
+    ## would be to either fill the hole with the surrounding values, or simply
+    ## discard these values during the optimization.
     self.disparity[self.disparity==2047] = self.disparity[self.disparity<2047].max()
 
+  def project_into_camera(self, int_param, ext_param):
+    xyz_c = dot(self.xyz - ext_param.T, ext_param.R)
+    self.rs = int_param.center + int_param.f * xyz_c[:,:2] / xyz_c[:,[2,2]]
+
+  ## This run_optimization method runs a draft of an optimization procedure
+  ## based on preserving the edge distances of the mesh while flattening the
+  ## corodinates into a plane. This should be eventually removed as the model
+  ## fitting will now be performed inside a separate class, and this one will
+  ## merely provide the data to it: the "reconstructed" xyz point cloud.
   def run_optimization(self):
     ## Find the "middle" point to make it the origin, and make it.
     self.mp = (self.disparity.shape[0]/2) * self.disparity.shape[1] + self.disparity.shape[1]/2
@@ -293,10 +305,6 @@ class SquareMesh:
     self.uv = reshape(uv_opt,(-1,2))
 
     return success, final_err
-
-  def project_into_camera(self, int_param, ext_param):
-    xyz_c = dot(self.xyz - ext_param.T, ext_param.R)
-    self.rs = int_param.center + int_param.f * xyz_c[:,:2] / xyz_c[:,[2,2]]
 
 ###############################################################################
 ##

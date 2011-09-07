@@ -242,7 +242,7 @@ if __name__ == '__main__':
   p0[:,0] = mean(q[:,0])
 
   pl0[:3*Np] = p0.ravel()
-  
+
   # pl0[:3*Np] = 0
   # pl0[:3*Np] = q.ravel()
 
