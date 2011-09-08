@@ -155,6 +155,7 @@ def sys_jacobian(pl, q, U, V):
   return jacobian
 
 def calculate_U_and_V(Nl,Nk):
+  ## Initialize matrices with zeros.
   U = zeros((Nl*Nk,Nl*Nk))
   V = zeros((Nl*Nk,Nl*Nk))
 
@@ -164,9 +165,9 @@ def calculate_U_and_V(Nl,Nk):
       ## The point around which we are taking the derivative. index calculated
       ## using normal row-major order.
       ind = l*Nk+k
-      ## The reference point around which we set the values of the Sobel
-      ## operator, or whatever filter is chosen to calculate the
-      ## derivatives. This is for the magic in the next lines
+      ## The reference point ("Destination" index) around which we set the
+      ## values of the Sobel operator, or whatever filter is chosen to calculate
+      ## the derivatives. This is for the magic in the next lines
       dind = ind
 
       # if l>1 and l < Nl-1 and k>1 and k < Nk-1 : NOP
@@ -197,9 +198,10 @@ def calculate_U_and_V(Nl,Nk):
 
   return U, V
 
+
+###############################################################################
+## Main function, for testing.
 if __name__ == '__main__':
-
-
   ## Size of the model, lines and columns
   Nl = 7
   Nk = 7
@@ -239,7 +241,7 @@ if __name__ == '__main__':
   ## Run optimization
   pl_opt, success = scipy.optimize.leastsq(sys_eqs, pl0, args=(q,U,V), Dfun=sys_jacobian)
 
-  Niter = 5
+  Niter = 1
   for kk in range(Niter):
     q_query = xyz_tree.query(pl_opt.reshape(-1,3)[:Np])
     q = q_data[q_query[1]]
