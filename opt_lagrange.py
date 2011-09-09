@@ -162,7 +162,7 @@ def calculate_U_and_V(Nl,Nk):
   eight_neighborhood = array([-1-Nk, -Nk, 1-Nk, -1, 0, 1, -1+Nk, Nk, 1+Nk], dtype=int16)
   for l in range(Nl):
     for k in range(Nk):
-      ## The point around which we are taking the derivative. index calculated
+      ## The point around which we are taking the derivative. Index calculated
       ## using normal row-major order.
       ind = l*Nk+k
       ## The reference point ("Destination" index) around which we set the
@@ -198,6 +198,31 @@ def calculate_U_and_V(Nl,Nk):
 
   return U, V
 
+def calculate_2nd_devs(Nl,Nk):
+  ## Initialize matrices with zeros.
+  UU = zeros((Nl*Nk,Nl*Nk))
+  VV = zeros((Nl*Nk,Nl*Nk))
+  Laplace = zeros((Nl*Nk,Nl*Nk))
+
+  u_neighborhood = array([-1, 0, 1], dtype=int16)
+  v_neighborhood = array([-Nk, 0, Nk], dtype=int16)
+  for l in range(Nl):
+    for k in range(Nk):
+      ## The point around which we are taking the derivative. Index calculated
+      ## using normal row-major order.
+      ind = l*Nk+k
+
+      if k > 0 and k < Nk - 1:
+        UU[ind, ind + u_neighborhood] = array([1,-2,1])
+      if l > 0 and l < Nl - 1:
+        VV[ind, ind + v_neighborhood] = array([1,-2,1])
+
+  for l in range(Nl*Nk):
+    for k in range(Nk*Nl):
+      Laplace[l,k] = UU[l,l] * UU[l,k] + VV[l,l] * VV[l,k]
+
+  return UU, VV, Laplace
+
 
 ###############################################################################
 ## Main function, for testing.
@@ -209,6 +234,7 @@ if __name__ == '__main__':
 
   ## Calculates the U and V matrices. (Partial derivatives on u and v directions).
   U, V = calculate_U_and_V(Nl, Nk)
+  UU, VV, Laplace = calculate_2nd_devs(Nl,Nk)
 
   ## Generate points over a cylinder for test.
   oversample = 10
