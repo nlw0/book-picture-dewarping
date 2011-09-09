@@ -156,6 +156,16 @@ def generate_cyl_points(k,s,tt,N):
   p = dot(pr,R2)*k
   return p
 
+def generate_elli_points(k,s,tt,N):
+  uv = s*((mgrid[:N,:N,0:1,].reshape(3,-1).T)-.5*N)/float(N)
+  Q1 = array([0.,0.,sin(tt/2)])
+  R1 = quaternion_to_matrix(Q1)
+  uvr = dot(uv,R1)
+  pr = c_[ uvr[:,0], uvr[:,1], sqrt( k**2 - uvr[:,0]**2 - 2*uvr[:,1]**2 ) ]
+  R2 = R1.T
+  p = dot(pr,R2)
+  return p
+
 def test_normal():
   ##############################################################################
   ## Test normal estimation (not quite plane fitting, one parameter missing).

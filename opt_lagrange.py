@@ -203,29 +203,35 @@ def calculate_U_and_V(Nl,Nk):
 ## Main function, for testing.
 if __name__ == '__main__':
   ## Size of the model, lines and columns
-  Nl = 7
-  Nk = 7
+  Nl = 11
+  Nk = 11
   Np = Nl*Nk # Total number of points
 
   ## Calculates the U and V matrices. (Partial derivatives on u and v directions).
   U, V = calculate_U_and_V(Nl, Nk)
 
   ## Generate points over a cylinder for test.
-  k = 6 # Curvature
-  s = 15.0
-  tt = 0.5*pi/3 # Angle between the mesh and cylinder axis
   oversample = 10
   Nko = Nk * oversample
   Nlo = Nl * oversample
-  q_data = generate_cyl_points(k,s,tt,Nko)
+  k = 6 # Curvature
+  s = 15.0
+  tt = 0.5*pi/3 # Angle between the mesh and cylinder axis
+  #q_data = generate_cyl_points(k,s,tt,Nko)
+  k = 11# Curvature
+  s = 11
+  tt = 0*0.5*pi/3 # Angle between the mesh and cylinder axis
+  q_data = generate_elli_points(k,s,tt,Nko)
 
   ## Initial guess, Points over the xy plane
   pl0 = zeros(6*Np)
   p0 = .0 + mgrid[:Nk,:Nl,:1].reshape(3,-1).T
+  p0 += array([-.5*(Nk-1), -.5*(Nl-1),0])
+  # p0 = .0 + mgrid[:Nk,:Nl,:1].reshape(3,-1).T
   p0[:,2] = mean(q_data[:,2])
-  tt = 0.5*pi/3.2
-  p0 = dot(p0 - Nl/2, array([[cos(tt), -sin(tt), 0], [sin(tt), cos(tt), 0], [0,0,1]]))
-  p0 += Nl/2 + array([2.5,2.5,0])
+  # tt = 0.5*pi/3.2
+  # p0 = dot(p0 - Nl/2, array([[cos(tt), -sin(tt), 0], [sin(tt), cos(tt), 0], [0,0,1]]))
+  # p0 += Nl/2 + array([2.5,2.5,0])
 
   pl0[:3*Np] = p0.ravel()
 
@@ -241,7 +247,7 @@ if __name__ == '__main__':
   ## Run optimization
   pl_opt, success = scipy.optimize.leastsq(sys_eqs, pl0, args=(q,U,V), Dfun=sys_jacobian)
 
-  Niter = 1
+  Niter = 2
   for kk in range(Niter):
     q_query = xyz_tree.query(pl_opt.reshape(-1,3)[:Np])
     q = q_data[q_query[1]]
