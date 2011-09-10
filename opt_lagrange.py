@@ -29,7 +29,7 @@ from scipy.spatial import KDTree
 
 ion()
 
-def sys_eqs(pl, q, U, V):
+def sys_eqs(pl, q, U, V, UU, VV, Laplace, Gamma):
   '''This function outputs a vector with the values of the functions from the
   big non-linear system of equations that we need to solve in order to fit the
   inextensible surface. The solution is found by minimizing the sums of the
@@ -46,14 +46,18 @@ def sys_eqs(pl, q, U, V):
   ## matrix with the 3 multipliers for the conditions over each point.
 
   ## First 3N values are the coordinates for the N points
-  p = reshape(pl[:3*N], (N, -1))
+  p = reshape(pl[:3*N], (N, 3))
   ## Last 3N values are the Lagrange multipliers ("lambdas"). Each point has 3
   ## corresponding restrictions, and each of these has one multiplier.
-  l = reshape(pl[3*N:], (N, -1))
+  l = reshape(pl[3*N:], (N, 3))
 
   ## Calculate the p derivatives (sum U_j^k p_k^w) into temporary arrays.
   p_u = dot(U, p)
   p_v = dot(V, p)
+
+  ## Second order derivatives for regularization.
+  p_uu = dot(UU, p)
+  p_vv = dot(VV, p)
 
   ## Calculate "residue" function for each coordinate (p - q plus all the
   ## magical lambdas), and calculate the values of the restriction functions.
@@ -62,9 +66,12 @@ def sys_eqs(pl, q, U, V):
   ## gradient of the original objective function as a linear combination of the
   ## gradients of the "g" functions (constraints). The obscure l[:,3*[0]] is a
   ## matrix with the first column of l replicated 3 times.
-  h = p - q + (dot(U.T, l[:,3*[0]] * p_u) +
-               dot(V.T, l[:,3*[1]] * p_v) +
-               (dot(U.T, l[:,3*[2]] * p_v) + dot(V.T, l[:,3*[2]] * p_u)) / 2)
+  h = (p - q
+       + Gamma * (dot(diag(diag(UU)), p_uu) + dot(diag(diag(VV)), p_vv))
+       + (dot(U.T, l[:,3*[0]] * p_u) +
+          dot(V.T, l[:,3*[1]] * p_v) +
+          (dot(U.T, l[:,3*[2]] * p_v) + dot(V.T, l[:,3*[2]] * p_u)) / 2)
+       )
 
   ## The restriction functions, pretty straight forward.
   g = c_[(p_u**2).sum(1) - 1,
@@ -73,7 +80,7 @@ def sys_eqs(pl, q, U, V):
 
   return r_[ravel(h), ravel(g)]
 
-def sys_jacobian(pl, q, U, V):
+def sys_jacobian(pl, q, U, V, UU, VV, Laplace, Gamma):
   '''This function returns the Jacobian matrix of the target function to fit an
   inextensible surface to given data. It receives q (associated measurements) as
   a parameter because it is necessary in sys_eqs, but it is never used in the
@@ -104,10 +111,13 @@ def sys_jacobian(pl, q, U, V):
   ## Derivative of the objective function (plus Lagrange stuff) relative to
   ## coordinates. It is zero for any different dimensions, and is the same for
   ## every three coordinates. So we can calculate the matrix once and replicate.
-  dhdp_base = identity(Np) + (dot(dot(U.T, diag(l[:,0])), U) +
-                              dot(dot(V.T, diag(l[:,1])), V) +
-                              (dot(dot(U.T, diag(l[:,2])),V) +
-                               dot(dot(V.T, diag(l[:,2])),U))/2)
+  dhdp_base = (identity(Np)
+               + Gamma * Laplace
+               + (dot(dot(U.T, diag(l[:,0])), U) +
+                  dot(dot(V.T, diag(l[:,1])), V) +
+                  (dot(dot(U.T, diag(l[:,2])),V) +
+                   dot(dot(V.T, diag(l[:,2])),U))/2)
+               )
 
   dhdp = zeros((3*N, 3*N))
   dhdp[0::3,0::3] = dhdp_base
@@ -227,37 +237,43 @@ def calculate_2nd_devs(Nl,Nk):
 ###############################################################################
 ## Main function, for testing.
 if __name__ == '__main__':
+  ### Initialize model parameters
   ## Size of the model, lines and columns
-  Nl = 11
-  Nk = 11
+  Nl = 8
+  Nk = 8
   Np = Nl*Nk # Total number of points
 
   ## Calculates the U and V matrices. (Partial derivatives on u and v directions).
   U, V = calculate_U_and_V(Nl, Nk)
   UU, VV, Laplace = calculate_2nd_devs(Nl,Nk)
+  Gamma = 0.5
 
   ## Generate points over a cylinder for test.
-  oversample = 10
+  oversample = 20
   Nko = Nk * oversample
   Nlo = Nl * oversample
-  k = 6 # Curvature
-  s = 15.0
+  ## Cylinder test
+  k = 10 # Curvature
+  s = 10.0
   tt = 0.5*pi/3 # Angle between the mesh and cylinder axis
-  #q_data = generate_cyl_points(k,s,tt,Nko)
-  k = 11# Curvature
-  s = 11
-  tt = 0*0.5*pi/3 # Angle between the mesh and cylinder axis
-  q_data = generate_elli_points(k,s,tt,Nko)
+  q_data = generate_cyl_points(k,s,tt,Nko)
+  ## Ellipsoid test
+  # k = 9 # Curvature
+  # s = 9
+  # tt = 0.5*pi/3 # Angle between the mesh and cylinder axis
+  # q_data = generate_elli_points(k,s,tt,Nko)
 
   ## Initial guess, Points over the xy plane
   pl0 = zeros(6*Np)
-  p0 = .0 + mgrid[:Nk,:Nl,:1].reshape(3,-1).T
-  p0 += array([-.5*(Nk-1), -.5*(Nl-1),0])
+  ## Ellip
   # p0 = .0 + mgrid[:Nk,:Nl,:1].reshape(3,-1).T
+  # p0 += array([-.5*(Nk-1), -.5*(Nl-1),0])
+  ## Cyl
+  p0 = .0 + mgrid[:Nk,:Nl,:1].reshape(3,-1).T
   p0[:,2] = mean(q_data[:,2])
   # tt = 0.5*pi/3.2
   # p0 = dot(p0 - Nl/2, array([[cos(tt), -sin(tt), 0], [sin(tt), cos(tt), 0], [0,0,1]]))
-  # p0 += Nl/2 + array([2.5,2.5,0])
+  p0 += array([2.5,2.5,0])
 
   pl0[:3*Np] = p0.ravel()
 
@@ -271,13 +287,13 @@ if __name__ == '__main__':
   q = q_data[q_query[1]]
 
   ## Run optimization
-  pl_opt, success = scipy.optimize.leastsq(sys_eqs, pl0, args=(q,U,V), Dfun=sys_jacobian)
+  pl_opt, success = scipy.optimize.leastsq(sys_eqs, pl0, args=(q,U,V,UU,VV,Laplace,Gamma), Dfun=sys_jacobian)
 
-  Niter = 2
+  Niter = 1
   for kk in range(Niter):
     q_query = xyz_tree.query(pl_opt.reshape(-1,3)[:Np])
     q = q_data[q_query[1]]
-    pl_opt, success = scipy.optimize.leastsq(sys_eqs, pl_opt, args=(q,U,V), Dfun=sys_jacobian)
+    pl_opt, success2 = scipy.optimize.leastsq(sys_eqs, pl_opt, args=(q,U,V,UU,VV,Laplace,Gamma), Dfun=sys_jacobian)
 
   ## Get the estimated coordinates, organize (and dump multipliers)
   p = pl_opt.reshape(-1,3)[:Np]
@@ -290,7 +306,7 @@ if __name__ == '__main__':
   ax = p3.Axes3D(fig, aspect='equal')
   title('Square mesh on 3D space', fontsize=20, fontweight='bold')
   ax.axis('equal')
-  ax.plot_wireframe(q_data[:,0].reshape(Nl*oversample,Nk*oversample),q_data[:,1].reshape(Nl*oversample,Nk*oversample),q_data[:,2].reshape(Nl*oversample,Nk*oversample), color='#0000ff')
+  ax.plot_wireframe(q_data[:,0].reshape(Nl*oversample,Nk*oversample),q_data[:,1].reshape(Nl*oversample,Nk*oversample),q_data[:,2].reshape(Nl*oversample,Nk*oversample), color='#8888ff')
   #ax.plot_wireframe(p0[:,0].reshape(Nl,Nk),p0[:,1].reshape(Nl,Nk),p0[:,2].reshape(Nl,Nk), color='#008888')
   #ax.plot_wireframe(q[:,0].reshape(Nl,Nk),q[:,1].reshape(Nl,Nk),q[:,2].reshape(Nl,Nk), color='g')
   ax.plot_wireframe(p[:,0].reshape(Nl,Nk),p[:,1].reshape(Nl,Nk),p[:,2].reshape(Nl,Nk), color='r')
