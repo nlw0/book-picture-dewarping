@@ -234,6 +234,42 @@ def calculate_2nd_devs(Nl,Nk):
   return UU, VV, Laplace
 
 
+
+class SurfaceModel:
+  def __init__(self, Nl, Nk):
+    self.Nl = Nl
+    self.Nk = Nk
+    self.Np = self.Nl * self.Nk
+
+    ## Calculates the U and V matrices. (Partial derivatives on u and v directions).
+    self.U, self.V = calculate_U_and_V(self.Nl, self.Nk)
+    self.UU, self.VV, self.Laplace = calculate_2nd_devs(self.Nl,self.Nk)
+
+    
+  def calculate_initial_guess(self, middle):
+    ## Initial guess, Points over the xy plane
+    self.pl0 = zeros(6*Np)
+    ## Ellip
+    self.p0 = .0 + mgrid[:Nk,:Nl,:1].reshape(3,-1).T
+    self.p0 += array([-.5*(Nk-1), -.5*(Nl-1),0])
+    ## Cyl
+    # p0 = .0 + mgrid[:Nk,:Nl,:1].reshape(3,-1).T
+    # p0[:,2] = mean(q_data[:,2])
+    # tt = 0.5*pi/3.2
+    # p0 = dot(p0 - Nl/2, array([[cos(tt), -sin(tt), 0], [sin(tt), cos(tt), 0], [0,0,1]]))
+    self.p0 += middle #array([2.5,2.5,0])
+
+    self.pl0[:3*Np] = self.p0.ravel()
+
+  def initialize_kdtree(self, q_data):
+    self.xyz_tree = KDTree(q_data)
+
+  def assign_input_points(self, p):  
+    q_query = self.xyz_tree.query(p)
+    self.q = q_data[q_query[1]]
+        
+
+
 ###############################################################################
 ## Main function, for testing.
 if __name__ == '__main__':
@@ -241,11 +277,10 @@ if __name__ == '__main__':
   ## Size of the model, lines and columns
   Nl = 8
   Nk = 8
-  Np = Nl*Nk # Total number of points
+  Np = Nl*Nk
 
-  ## Calculates the U and V matrices. (Partial derivatives on u and v directions).
-  U, V = calculate_U_and_V(Nl, Nk)
-  UU, VV, Laplace = calculate_2nd_devs(Nl,Nk)
+  surf = SurfaceModel(Nl, Nk)
+
   Gamma = 0.5
 
   ## Generate points over a cylinder for test.
@@ -253,47 +288,28 @@ if __name__ == '__main__':
   Nko = Nk * oversample
   Nlo = Nl * oversample
   ## Cylinder test
-  k = 10 # Curvature
-  s = 10.0
-  tt = 0.5*pi/3 # Angle between the mesh and cylinder axis
-  q_data = generate_cyl_points(k,s,tt,Nko)
-  ## Ellipsoid test
-  # k = 9 # Curvature
-  # s = 9
+  # k = 10 # Curvature
+  # s = 10.0
   # tt = 0.5*pi/3 # Angle between the mesh and cylinder axis
-  # q_data = generate_elli_points(k,s,tt,Nko)
+  # q_data = generate_cyl_points(k,s,tt,Nko)
+  ## Ellipsoid test
+  k = 9 # Curvature
+  s = 9
+  tt = 0.5*pi/3 # Angle between the mesh and cylinder axis
+  q_data = generate_elli_points(k,s,tt,Nko)
 
-  ## Initial guess, Points over the xy plane
-  pl0 = zeros(6*Np)
-  ## Ellip
-  # p0 = .0 + mgrid[:Nk,:Nl,:1].reshape(3,-1).T
-  # p0 += array([-.5*(Nk-1), -.5*(Nl-1),0])
-  ## Cyl
-  p0 = .0 + mgrid[:Nk,:Nl,:1].reshape(3,-1).T
-  p0[:,2] = mean(q_data[:,2])
-  # tt = 0.5*pi/3.2
-  # p0 = dot(p0 - Nl/2, array([[cos(tt), -sin(tt), 0], [sin(tt), cos(tt), 0], [0,0,1]]))
-  p0 += array([2.5,2.5,0])
-
-  pl0[:3*Np] = p0.ravel()
-
-  ## Taget points
-  # q = c_[q_data[:,0].reshape(Nlo,Nko)[oversample/2::oversample,oversample/2::oversample].ravel(),
-  #        q_data[:,1].reshape(Nlo,Nko)[oversample/2::oversample,oversample/2::oversample].ravel(),
-  #        q_data[:,2].reshape(Nlo,Nko)[oversample/2::oversample,oversample/2::oversample].ravel(),
-  #        ]
-  xyz_tree = KDTree(q_data)
-  q_query = xyz_tree.query(p0)
-  q = q_data[q_query[1]]
+  surf.calculate_initial_guess(array([0.,0.,mean(q_data[:,2])]))
+  surf.initialize_kdtree(q_data)
+  surf.assign_input_points(surf.p0)
 
   ## Run optimization
-  pl_opt, success = scipy.optimize.leastsq(sys_eqs, pl0, args=(q,U,V,UU,VV,Laplace,Gamma), Dfun=sys_jacobian)
+  pl_opt, success = scipy.optimize.leastsq(sys_eqs, surf.pl0, args=(surf.q,surf.U,surf.V,surf.UU,surf.VV,surf.Laplace,Gamma), Dfun=sys_jacobian)
 
-  Niter = 1
-  for kk in range(Niter):
-    q_query = xyz_tree.query(pl_opt.reshape(-1,3)[:Np])
-    q = q_data[q_query[1]]
-    pl_opt, success2 = scipy.optimize.leastsq(sys_eqs, pl_opt, args=(q,U,V,UU,VV,Laplace,Gamma), Dfun=sys_jacobian)
+  # Niter = 1
+  # for kk in range(Niter):
+  #   q_query = xyz_tree.query(pl_opt.reshape(-1,3)[:Np])
+  #   q = q_data[q_query[1]]
+  #   pl_opt, success2 = scipy.optimize.leastsq(sys_eqs, pl_opt, args=(q,U,V,UU,VV,Laplace,Gamma), Dfun=sys_jacobian)
 
   ## Get the estimated coordinates, organize (and dump multipliers)
   p = pl_opt.reshape(-1,3)[:Np]
@@ -306,9 +322,9 @@ if __name__ == '__main__':
   ax = p3.Axes3D(fig, aspect='equal')
   title('Square mesh on 3D space', fontsize=20, fontweight='bold')
   ax.axis('equal')
-  ax.plot_wireframe(q_data[:,0].reshape(Nl*oversample,Nk*oversample),q_data[:,1].reshape(Nl*oversample,Nk*oversample),q_data[:,2].reshape(Nl*oversample,Nk*oversample), color='#8888ff')
+  #ax.plot_wireframe(q_data[:,0].reshape(Nl*oversample,Nk*oversample),q_data[:,1].reshape(Nl*oversample,Nk*oversample),q_data[:,2].reshape(Nl*oversample,Nk*oversample), color='#8888ff')
   #ax.plot_wireframe(p0[:,0].reshape(Nl,Nk),p0[:,1].reshape(Nl,Nk),p0[:,2].reshape(Nl,Nk), color='#008888')
-  #ax.plot_wireframe(q[:,0].reshape(Nl,Nk),q[:,1].reshape(Nl,Nk),q[:,2].reshape(Nl,Nk), color='g')
+  #ax.plot_wireframe(surf.q[:,0].reshape(Nl,Nk),surf.q[:,1].reshape(Nl,Nk),surf.q[:,2].reshape(Nl,Nk), color='g')
   ax.plot_wireframe(p[:,0].reshape(Nl,Nk),p[:,1].reshape(Nl,Nk),p[:,2].reshape(Nl,Nk), color='r')
 
   mrang = max([p[:,0].max()-p[:,0].min(), p[:,1].max()-p[:,1].min(), p[:,2].max()-p[:,2].min()])/2
