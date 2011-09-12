@@ -395,14 +395,14 @@ Usage: %s <data_path>'''%(sys.argv[0]))
 
   ### Initialize model parameters
   ## Size of the model, lines and columns
-  Nl = 5
-  Nk = 5
-  mesh_scale = 0.01
+  Nl = 7
+  Nk = 9
+  mesh_scale = 0.018
   Np = Nl*Nk
 
   surf = SurfaceModel(Nl, Nk)
 
-  Gamma = 0.1
+  Gamma = 0.5
 
   surf.initialize_kdtree(sqmesh.xyz)
   surf.calculate_initial_guess(mesh_scale, mean(sqmesh.xyz,0))
@@ -520,8 +520,8 @@ Usage: %s <data_path>'''%(sys.argv[0]))
 
     ax.axis('equal')
     ax.plot_wireframe(x,y,z, color='#8888ff')
-    ax.plot_wireframe(surf.q[:,0].reshape(Nk,Nl),surf.q[:,1].reshape(Nk,Nl),surf.q[:,2].reshape(Nk,Nl), color='g')
-    ax.plot_wireframe(p[:,0].reshape(Nk,Nl),p[:,1].reshape(Nk,Nl),p[:,2].reshape(Nk,Nl), color='r')
+    ax.plot_wireframe(surf.q[:,0].reshape(Nl,Nk),surf.q[:,1].reshape(Nl,Nk),surf.q[:,2].reshape(Nl,Nk), color='g')
+    ax.plot_wireframe(p[:,0].reshape(Nl,Nk),p[:,1].reshape(Nl,Nk),p[:,2].reshape(Nl,Nk), color='r')
 
     mrang = max([x.max()-x.min(), y.max()-y.min(), z.max()-z.min()])/2
     midx = (x.max()+x.min())/2
