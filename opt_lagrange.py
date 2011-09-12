@@ -51,6 +51,14 @@ def sys_eqs(pl, q, U, V, UU, VV, Laplace, mesh_scale, Gamma):
   ## corresponding restrictions, and each of these has one multiplier.
   l = reshape(pl[3*N:], (N, 3))
 
+  # print 'p'
+  # print p
+  # print 'q'
+  # print q
+
+  # print 'p-q'
+  # print p-q
+
   ## Calculate the p derivatives (sum U_j^k p_k^w) into temporary arrays.
   p_u = dot(U, p)
   p_v = dot(V, p)
@@ -292,14 +300,14 @@ class SurfaceModel:
 if __name__ == '__main__':
   ### Initialize model parameters
   ## Size of the model, lines and columns
-  Nl = 5
-  Nk = 10
+  Nl = 12
+  Nk = 6
   mesh_scale = 1.0
   Np = Nl*Nk
 
   surf = SurfaceModel(Nl, Nk)
 
-  Gamma = 0.0
+  Gamma = 1.0
 
   ## Generate points over a cylinder for test.
   Nko = 100
@@ -311,17 +319,19 @@ if __name__ == '__main__':
   # q_data = generate_cyl_points(k,s,tt,Nko)
   ## Ellipsoid test
   k = 100 # Nl * mesh_scale * 1.05 # Curvature
-  s = 10
+  s = 13
   tt = 0.5*pi/3 # Angle between the mesh and cylinder axis
-  q_data = generate_elli_points(k,s,tt,Nko)
+  q_data = generate_elli_points(k,s,tt,Nko) + 20
   
 
   surf.initialize_kdtree(q_data)
-  surf.calculate_initial_guess(mesh_scale, array([0.,0.,mean(q_data[:,2])]))
+  surf.calculate_initial_guess(mesh_scale, q_data.mean(0))
   surf.assign_input_points()
 
+  
+  sys_eqs(surf.pl0, surf.q, surf.U, surf.V, surf.UU, surf.VV, surf.Laplace, mesh_scale, Gamma)
+  
   surf.fit(mesh_scale, Gamma)
-  #surf.calculate_initial_guess(mesh_scale, array([0.,0.,mean(q_data[:,2])]))
 
   Niter = 0
   for kk in range(Niter):
