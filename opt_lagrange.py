@@ -77,7 +77,7 @@ def sys_eqs(pl, q, U, V, UU, VV, Laplace, mesh_scale, Gamma):
   g = c_[(p_u**2).sum(1) - mesh_scale**2,
          (p_v**2).sum(1) - mesh_scale**2,
          (p_u*p_v).sum(1)]
-
+  
   return r_[ravel(h), ravel(g)]
 
 def sys_jacobian(pl, q, U, V, UU, VV, Laplace, mesh_scale, Gamma):
@@ -249,6 +249,8 @@ class SurfaceModel:
     ## Initial guess, Points over the xy plane
     self.pl0 = zeros(6*self.Np)
     ## Ellip
+    # p0 = .0 + mgrid[:self.Nk,:self.Nl,:1].reshape(3,-1).T
+    # p0 += array([-.5*(self.Nk-1), -.5*(self.Nl-1),0])
     p0 = .0 + mgrid[:self.Nk,:self.Nl,:1].reshape(3,-1).T
     p0 += array([-.5*(self.Nk-1), -.5*(self.Nl-1),0])
     p0 *= mesh_scale
@@ -290,14 +292,14 @@ class SurfaceModel:
 if __name__ == '__main__':
   ### Initialize model parameters
   ## Size of the model, lines and columns
-  Nl = 3
-  Nk = 9
+  Nl = 5
+  Nk = 10
   mesh_scale = 1.0
   Np = Nl*Nk
 
   surf = SurfaceModel(Nl, Nk)
 
-  Gamma = 0.000
+  Gamma = 0.0
 
   ## Generate points over a cylinder for test.
   Nko = 100
@@ -308,18 +310,20 @@ if __name__ == '__main__':
   # tt = 0.5*pi/3 # Angle between the mesh and cylinder axis
   # q_data = generate_cyl_points(k,s,tt,Nko)
   ## Ellipsoid test
-  k = Nl * mesh_scale * 1.05 # Curvature
-  s = k
+  k = 100 # Nl * mesh_scale * 1.05 # Curvature
+  s = 10
   tt = 0.5*pi/3 # Angle between the mesh and cylinder axis
   q_data = generate_elli_points(k,s,tt,Nko)
+  
 
   surf.initialize_kdtree(q_data)
   surf.calculate_initial_guess(mesh_scale, array([0.,0.,mean(q_data[:,2])]))
+  surf.assign_input_points()
 
-  # surf.assign_input_points()
-  # surf.fit(mesh_scale, Gamma)
+  surf.fit(mesh_scale, Gamma)
+  #surf.calculate_initial_guess(mesh_scale, array([0.,0.,mean(q_data[:,2])]))
 
-  Niter = 3
+  Niter = 0
   for kk in range(Niter):
     surf.assign_input_points()
     surf.fit(mesh_scale, Gamma)
@@ -337,8 +341,12 @@ if __name__ == '__main__':
   ax.axis('equal')
   #ax.plot_wireframe(q_data[:,0].reshape(Nlo,Nko),q_data[:,1].reshape(Nlo,Nko),q_data[:,2].reshape(Nlo,Nko), color='#8888ff')
   #ax.plot_wireframe(p0[:,0].reshape(Nl,Nk),p0[:,1].reshape(Nl,Nk),p0[:,2].reshape(Nl,Nk), color='#008888')
-  ax.plot_wireframe(surf.q[:,0].reshape(Nk,Nl),surf.q[:,1].reshape(Nk,Nl),surf.q[:,2].reshape(Nk,Nl), color='g')
-  ax.plot_wireframe(p[:,0].reshape(Nk,Nl),p[:,1].reshape(Nk,Nl),p[:,2].reshape(Nk,Nl), color='r')
+  #ax.plot_wireframe(surf.q[:,0],surf.q[:,1],surf.q[:,2], rstride=Nk, cstride=Nl, color='g')
+  # ax.plot_wireframe(p[:,0],p[:,1],p[:,2], rstride=Nk, cstride=Nl, color='r')
+  qx,qy,qz = surf.q.reshape((Nk, Nl, 3)).T
+  ax.plot_wireframe(qx,qy,qz, color='g')
+  px,py,pz = p.reshape((Nk, Nl, 3)).T
+  ax.plot_wireframe(px,py,pz, color='r')
 
   mrang = max([p[:,0].max()-p[:,0].min(), p[:,1].max()-p[:,1].min(), p[:,2].max()-p[:,2].min()])/2
   midx = (p[:,0].max()+p[:,0].min())/2
