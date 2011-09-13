@@ -51,14 +51,6 @@ def sys_eqs(pl, q, U, V, UU, VV, Laplace, mesh_scale, Gamma):
   ## corresponding restrictions, and each of these has one multiplier.
   l = reshape(pl[3*N:], (N, 3))
 
-  print 'p'
-  print p
-  print 'q'
-  print q
-
-  print 'p-q'
-  print p-q
-
   ## Calculate the p derivatives (sum U_j^k p_k^w) into temporary arrays.
   p_u = dot(U, p)
   p_v = dot(V, p)

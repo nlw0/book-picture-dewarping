@@ -305,7 +305,7 @@ class SquareMesh:
 
     return success, final_err
 
-def project_into_camera(self, xyz, int_param, ext_param):
+def project_into_camera(xyz, int_param, ext_param):
   xyz_c = dot(xyz - ext_param.T, ext_param.R)
   rs = int_param.center + int_param.f * xyz_c[:,:2] / xyz_c[:,[2,2]]
   return rs
@@ -317,12 +317,15 @@ if __name__ == '__main__':
 
   ion() ## Turn on real-time plotting
 
+  #do_optim = True
+  do_optim = False
+
   ## Plot stuff or not?
   plot_wireframe = True
   # plot_wireframe = False
   # plot_scatter = True
-  plot_disparity = False
-  # plot_disparity = True
+  #plot_disparity = False
+  plot_disparity = True
   plot_scatter = False
   # plot_meshes = True
   plot_meshes = False
@@ -372,9 +375,11 @@ Usage: %s <data_path>'''%(sys.argv[0]))
   ## then downsample, then turn the outliers into more ammenable values.
   # bbox = (0, 0, disparity.shape[1], disparity.shape[0]) # whole image
   # bbox = (230, 125, 550, 375) #just the book, whole book
-  #bbox = (230, 125, 400, 375)
+
+  ## paul_data/110307-094958
+  bbox = (215, 120, 365, 374)
   ##paul_data/110307-100158
-  bbox = (173, 142, 300, 350)
+  #bbox = (173, 142, 300, 350)
   sub = 1
 
   #############################################################################
@@ -395,101 +400,112 @@ Usage: %s <data_path>'''%(sys.argv[0]))
 
   ### Initialize model parameters
   ## Size of the model, lines and columns
+  # Nl = 11
+  # Nk = 15
+  # mesh_scale = 0.016
+  # Nl = 6
+  # Nk = 6
+  # mesh_scale = 0.022
   Nl = 7
   Nk = 9
-  mesh_scale = 0.018
+  mesh_scale = 0.022
   Np = Nl*Nk
-
-  surf = SurfaceModel(Nl, Nk)
 
   Gamma = 0.5
 
+  surf = SurfaceModel(Nl, Nk)
+
   surf.initialize_kdtree(sqmesh.xyz)
-  surf.calculate_initial_guess(mesh_scale, mean(sqmesh.xyz,0))
+  surf.calculate_initial_guess(mesh_scale, mean(sqmesh.xyz,0) + array([0.005,0.,0]))
 
-  Niter = 2
-  for kk in range(Niter):
+  if do_optim:
+    Niter = 1
+    for kk in range(Niter):
+      surf.assign_input_points()
+      surf.fit(mesh_scale, 0.0)
+      savetxt(data_path+'model.txt', surf.pl0)
+    Niter = 2
+    for kk in range(Niter):
+      surf.assign_input_points()
+      surf.fit(mesh_scale, Gamma)
+      savetxt(data_path+'model.txt', surf.pl0)
+  else:
+    surf.pl0 = loadtxt(data_path+'model.txt')
     surf.assign_input_points()
-    surf.fit(mesh_scale, Gamma)
 
-  if False:
-    ##############################################################################
-    ## Create camera projection of the 3D model
-    #T = array([0.05,0,-0.05])
-    #R = quaternion_to_matrix([0,0,0])
-    ## paul_data/110307-100158
-    T = array([3.843781456148149395e-02, 3.129406939503146662e-02, -1.630428273915007775e-01])
-    Q = array([1.076490576378562151e-02, 8.555519788242749168e-02, -1.376981646024684827e-02])
-    #T = array([0,0,0])
-    #Q = array([0,0,0])
-    #cam_ext = ExtrinsicParameters(T,R)
-    cam_ext = ExtrinsicParameters(T,quaternion_to_matrix(Q))
-    #cam_ext.look_at(array([-.02,-0.207,.58]))
-    #cam_ext.look_at(array([-.02,.03,.57]))
 
-    cam_shot = rot90(imread(data_path+'img.png'),3)
-    c_f = 86/.009 # (Lens focal length divided by pixel size, in mm)
-    c_copt = array([cam_shot.shape[1]/2., cam_shot.shape[0]/2.])
+  ##############################################################################
+  ## Create camera projection of the 3D model
+  #T = array([0.05,0,-0.05])
+  #R = quaternion_to_matrix([0,0,0])
+  ## paul_data/110307-100158
+  #T = array([3.843781456148149395e-02, 3.129406939503146662e-02, -1.630428273915007775e-01])
+  #Q = array([1.076490576378562151e-02, 8.555519788242749168e-02, -1.376981646024684827e-02])
+  ## 110307-095011
+  # T = array([ 0.07207353 , 0.07462706, -0.15900948])
+  # Q = array([-0.02869514,  0.08050187, -0.03214738])
+  ## paul_data/110307-094958
+  T = array([-0.05655333,  0.01912933, -0.15601968])
+  Q = array([ 0.00333867, -0.00544789, -0.02172069])
+  #T = array([0,0,0])
+  #Q = array([0,0,0])
+  #cam_ext = ExtrinsicParameters(T,R)
+  cam_ext = ExtrinsicParameters(T,quaternion_to_matrix(Q))
+  #cam_ext.look_at(array([-.02,-0.207,.58]))
+  #cam_ext.look_at(array([-.02,.03,.57]))
 
-    cam_int = IntrinsicParameters(c_f, c_copt)
+  cam_shot = rot90(imread(data_path+'img.png'),3)
+  c_f = 86/.009 # (Lens focal length divided by pixel size, in mm)
+  c_copt = array([cam_shot.shape[1]/2., cam_shot.shape[0]/2.])
 
-    project_into_camera(surf.coordinates(), cam_int, cam_ext)
+  cam_int = IntrinsicParameters(c_f, c_copt)
 
-    ##############################################################################
-    ## Calculate mapping value at grid points for mapping
+  rs = project_into_camera(surf.coordinates(), cam_int, cam_ext)
 
-    output_length=2000
-    output_size=(2000,2000)
+  ##############################################################################
+  ## Calculate mapping value at grid points for mapping
+  output_resolution = 200
+  output_size=(output_resolution * (Nl-1), output_resolution * (Nk-1))
 
-    lims_uv = zeros(4)
-    lims_uv[0] = min(sqmesh.uv[:,0])
-    lims_uv[1] = min(sqmesh.uv[:,1])
-    lims_uv[2] = max(sqmesh.uv[:,0])
-    lims_uv[3] = max(sqmesh.uv[:,1])
+  lims_uv = zeros(4)
+  lims_uv[0] = 0
+  lims_uv[1] = 0
+  lims_uv[2] = (Nk-1) * output_resolution
+  lims_uv[3] = (Nl-1) * output_resolution
 
-    max_uv_range = max(lims_uv[2]-lims_uv[0], lims_uv[3]-lims_uv[1])
+  max_uv_range = max(lims_uv[2]-lims_uv[0], lims_uv[3]-lims_uv[1])
 
-    maxNsps = int(1.2 * max(sqmesh.disparity.shape))
+  maxNsps = int(1.2 * max(sqmesh.disparity.shape))
+  grid_u, grid_v = output_resolution * mgrid[:Nl,:Nk]
 
-    map_scale = output_length / max_uv_range
+  grid_r = rs[:,0].reshape(Nl, Nk)
+  grid_s = rs[:,1].reshape(Nl, Nk)
 
-    grid_u, grid_v = mgrid[lims_uv[0]:lims_uv[2]:maxNsps*1j,lims_uv[1]:lims_uv[3]:maxNsps*1j]
+  the_mappings = []
 
-    grid_r = griddata(sqmesh.uv[:,0], sqmesh.uv[:,1], sqmesh.rs[:,0], grid_u, grid_v)
-    grid_s = griddata(sqmesh.uv[:,0], sqmesh.uv[:,1], sqmesh.rs[:,1], grid_u, grid_v)
+  for j in range(grid_u.shape[0]-1):
+    for k in range(grid_u.shape[1]-1):
+      u1, v1 = grid_u[j,k], grid_v[j,k]
+      u2, v2 = grid_u[j+1,k+1], grid_v[j+1,k+1]
+      r1, s1 = grid_r[j,k], grid_s[j,k]
+      r4, s4 = grid_r[j+1,k], grid_s[j+1,k]
+      r3, s3 = grid_r[j+1,k+1], grid_s[j+1,k+1]
+      r2, s2 = grid_r[j,k+1], grid_s[j,k+1]
+      the_mappings.append((u1,v1,u2,v2,r1,s1,r2,s2,r3,s3,r4,s4))
 
-    the_mappings = []
+  the_mappings = array(the_mappings)
 
-    for j in range(grid_u.shape[0]-1):
-      for k in range(grid_u.shape[1]-1):
-        if (grid_r.mask[j,k] or grid_s.mask[j,k] or
-            grid_r.mask[j,k+1] or grid_s.mask[j,k+1] or
-            grid_r.mask[j+1,k] or grid_s.mask[j+1,k] or
-            grid_r.mask[j+1,k+1] or grid_s.mask[j+1,k+1] ):
-          #print j,k, 'eek!'
-          continue
-        u1, v1 = grid_u[j,k], grid_v[j,k]
-        u2, v2 = grid_u[j+1,k+1], grid_v[j+1,k+1]
-        r1, s1 = grid_r[j,k], grid_s[j,k]
-        r4, s4 = grid_r[j+1,k], grid_s[j+1,k]
-        r3, s3 = grid_r[j+1,k+1], grid_s[j+1,k+1]
-        r2, s2 = grid_r[j,k+1], grid_s[j,k+1]
-        the_mappings.append((u1,v1,u2,v2,r1,s1,r2,s2,r3,s3,r4,s4))
+  the_mappings[:,[0,2]] -= lims_uv[0]
+  the_mappings[:,[1,3]] -= lims_uv[1]
 
-    the_mappings = array(the_mappings)
+  im = Image.open(data_path+'img.png')
+  cam_shot_pil = im.transpose(Image.ROTATE_270)
 
-    the_mappings[:,[0,2]] -= lims_uv[0]
-    the_mappings[:,[1,3]] -= lims_uv[1]
-    the_mappings[:,:4] *= map_scale
+  map_list = [((a[0],a[1],a[2],a[3]), (a[4], a[5], a[6], a[7], a[8], a[9], a[10],a[11])) for a in the_mappings]
 
-    im = Image.open(data_path+'img.png')
-    cam_shot_pil = im.transpose(Image.ROTATE_270)
+  dewarped_image = cam_shot_pil.transform(output_size, Image.MESH, map_list)
 
-    map_list = [((a[0],a[1],a[2],a[3]), (a[4], a[5], a[6], a[7], a[8], a[9], a[10],a[11])) for a in the_mappings]
-
-    dewarped_image = cam_shot_pil.transform(output_size, Image.MESH, map_list)
-
-    dewarped_image.save('dewarped.png')
+  dewarped_image.save('dewarped.png')
 
   #############################################################################
   ## Plot stuff
@@ -531,6 +547,24 @@ Usage: %s <data_path>'''%(sys.argv[0]))
     ax.set_xlim3d(midx-mrang, midx+mrang)
     ax.set_ylim3d(midy-mrang, midy+mrang)
     ax.set_zlim3d(midz-mrang, midz+mrang)
+
+
+    figure(5)
+    title('Contour plot from data and model', fontsize=20, fontweight='bold')
+    res = 0.0001
+    Nc = 20
+    #grid_y,grid_x = mgrid[,-.14:0:res]
+    grid_x = mgrid[-.14:0:res]
+    grid_y = mgrid[-.1:.1:res]
+    grid_kin = griddata(x.ravel(), y.ravel(), z.ravel(), grid_x.ravel(), grid_y.ravel(), interp='linear')
+    grid_mod = griddata(p[:,0], p[:,1], p[:,2], grid_x.ravel(), grid_y.ravel(), interp='linear')
+    # contour(x,y,z)
+    # contour(p[:,0].reshape(Nl,Nk),p[:,1].reshape(Nl,Nk),p[:,2].reshape(Nl,Nk))
+    contour(grid_x,grid_y,grid_kin,Nc)
+    contour(grid_x,grid_y,grid_mod,Nc)
+
+    axis('equal')
+
 
   if plot_scatter:
     ## Plot disparity data as an image
